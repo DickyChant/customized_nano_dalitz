@@ -1,0 +1,8 @@
+<lcgdict>
+  <class name="std::vector<reco::GsfTrackRef>"/>
+  <class name="std::vector<pat::PackedCandidateRef>"/>
+  <class name="edm::ValueMap<reco::GsfTrackRef>"/>
+  <class name="edm::Wrapper<edm::ValueMap<reco::GsfTrackRef> >"/>
+  <class name="edm::ValueMap<pat::PackedCandidateRef>"/>
+  <class name="edm::Wrapper<edm::ValueMap<pat::PackedCandidateRef> >"/>
+</lcgdict>

@@ -1,0 +1,14 @@
+# CMSSW / build artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.so
+*.d
+*.o
+.SCRAM/
+# large xgboost-native models (runtime uses the committed .onnx; regenerate .json if needed)
+HDalitzEle/MergedID/data/*.json
+# run outputs / logs
+*.root
+*.log
+nano*_cfg.py

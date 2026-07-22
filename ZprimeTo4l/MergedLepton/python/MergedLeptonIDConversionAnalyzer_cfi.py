@@ -1,0 +1,35 @@
+import FWCore.ParameterSet.Config as cms
+
+mergedLeptonIDConversionAnalyzer = cms.EDAnalyzer("MergedLeptonIDConversionAnalyzer",
+  isMC = cms.bool(False),
+  generator = cms.InputTag("generator"),
+  lheEvent = cms.InputTag("externalLHEProducer"),
+  srcEle = cms.InputTag("slimmedElectrons"),
+  srcMuon = cms.InputTag("slimmedMuons"),
+  srcPhoton = cms.InputTag("slimmedPhotons"),
+  conversions = cms.InputTag("reducedEgamma:reducedConversions"),
+  singleLegConversions = cms.InputTag("reducedEgamma:reducedSingleLegConversions"),
+  srcGenPtc = cms.InputTag("prunedGenParticles"),
+  srcPv = cms.InputTag("offlineSlimmedPrimaryVertices"),
+  pileupSummary = cms.InputTag("slimmedAddPileupInfo"),
+  beamSpot = cms.InputTag("offlineBeamSpot"),
+  addGsfTrkMap = cms.InputTag("modifiedHEEPIDVarValueMaps2nd","eleAddGsfTrk"),
+  addPackedCandMap = cms.InputTag("modifiedHEEPIDVarValueMaps2nd","eleAddPackedCand"),
+  trkIsoMap = cms.InputTag("modifiedHEEPIDVarValueMaps2nd","eleTrkPtIso"),
+  alphaTrack = cms.InputTag("modifiedHEEPIDVarValueMaps2nd","alphaTrack"),
+  alphaCalo = cms.InputTag("modifiedHEEPIDVarValueMaps2nd","alphaCalo"),
+  dPerpIn = cms.InputTag("modifiedHEEPIDVarValueMaps2nd","dPerpIn"),
+  normalizedDParaIn = cms.InputTag("modifiedHEEPIDVarValueMaps2nd","normalizedDParaIn"),
+  union5x5dEtaIn = cms.InputTag("modifiedHEEPIDVarValueMaps2nd","union5x5dEtaIn"),
+  union5x5dPhiIn = cms.InputTag("modifiedHEEPIDVarValueMaps2nd","union5x5dPhiIn"),
+  union5x5Energy = cms.InputTag("modifiedHEEPIDVarValueMaps2nd","union5x5Energy"),
+  triggerResults = cms.InputTag("TriggerResults","","HLT"),
+  triggerObjects = cms.InputTag("slimmedPatTrigger"),
+  trigList = cms.vstring(
+    "HLT_IsoMu24_v*"
+  ),
+  PUrwgt = cms.FileInPath("ZprimeTo4l/Analysis/data/PUrwgt20UL18.root"),
+  ptThresTrig = cms.double(26.),
+  ptThres = cms.double(10.),
+  drThres = cms.double(0.05)
+)
