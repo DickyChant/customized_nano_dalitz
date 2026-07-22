@@ -1,0 +1,29 @@
+<use name="FWCore/Framework"/>
+<use name="FWCore/ParameterSet"/>
+<use name="CommonTools/UtilAlgos"/>
+<use name="CommonTools/MVAUtils"/>
+<use name="DataFormats/Common"/>
+<use name="DataFormats/Candidate"/>
+<use name="DataFormats/RecoCandidate"/>
+<use name="DataFormats/PatCandidates"/>
+<use name="DataFormats/GsfTrackReco"/>
+<use name="DataFormats/TrackReco"/>
+<use name="DataFormats/EgammaReco"/>
+<use name="DataFormats/EgammaCandidates"/>
+<use name="DataFormats/MuonReco"/>
+<use name="DataFormats/VertexReco"/>
+<use name="DataFormats/Math"/>
+<use name="DataFormats/HepMCCandidate"/>
+<use name="TrackingTools/IPTools"/>
+<use name="TrackingTools/Records"/>
+<use name="TrackingTools/TransientTrack"/>
+<use name="RecoVertex/KalmanVertexFit"/>
+<use name="RecoVertex/VertexPrimitives"/>
+<use name="RecoEgamma/EgammaTools"/>
+<use name="ZprimeTo4l/ModifiedHEEP"/>
+<use name="root"/>
+<use name="rootmath"/>
+<use name="correctionlib"/>
+<export>
+  <lib name="1"/>
+</export>

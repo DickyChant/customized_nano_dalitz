@@ -1,0 +1,14 @@
+<use name="FWCore/Framework"/>
+<use name="FWCore/ParameterSet"/>
+<use name="FWCore/PluginManager"/>
+<use name="FWCore/Utilities"/>
+<use name="DataFormats/Common"/>
+<use name="DataFormats/PatCandidates"/>
+<use name="DataFormats/GsfTrackReco"/>
+<use name="DataFormats/VertexReco"/>
+<use name="DataFormats/Math"/>
+<use name="HDalitzEle/MergedID"/>
+<use name="xgboost"/>
+<use name="PhysicsTools/ONNXRuntime"/>
+<flags CXXFLAGS="-DHDALITZ_HAS_XGBOOST"/>
+<flags EDM_PLUGIN="1"/>

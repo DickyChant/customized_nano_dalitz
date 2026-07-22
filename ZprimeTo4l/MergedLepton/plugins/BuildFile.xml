@@ -1,0 +1,35 @@
+<use name="FWCore/Framework"/>
+<use name="FWCore/ParameterSet"/>
+<use name="FWCore/PluginManager"/>
+<use name="FWCore/ServiceRegistry"/>
+<use name="CommonTools/UtilAlgos"/>
+<use name="DataFormats/Common"/>
+<use name="DataFormats/Candidate"/>
+<use name="DataFormats/RecoCandidate"/>
+<use name="DataFormats/PatCandidates"/>
+<use name="DataFormats/TrackReco"/>
+<use name="DataFormats/GsfTrackReco"/>
+<use name="DataFormats/EgammaReco"/>
+<use name="DataFormats/EgammaCandidates"/>
+<use name="DataFormats/MuonReco"/>
+<use name="DataFormats/VertexReco"/>
+<use name="DataFormats/Math"/>
+<use name="DataFormats/HepMCCandidate"/>
+<use name="RecoEgamma/EgammaTools"/>
+<use name="RecoVertex/KalmanVertexFit"/>
+<use name="RecoVertex/VertexPrimitives"/>
+<use name="RecoVertex/KinematicFit"/>
+<use name="RecoVertex/KinematicFitPrimitives"/>
+<use name="TrackingTools/TransientTrack"/>
+<use name="TrackingTools/Records"/>
+<use name="ZprimeTo4l/MergedLepton"/>
+<use name="root"/>
+<use name="rootmath"/>
+<export>
+</export>
+<library file="*.cc" name="ZprimeTo4l_MergedLepton_plugins">
+  <flags EDM_PLUGIN="1"/>
+</library>
+<library file="cuts/*.cc" name="ZprimeTo4l_MergedLepton_plugins_cuts">
+  <flags EDM_PLUGIN="1"/>
+</library>

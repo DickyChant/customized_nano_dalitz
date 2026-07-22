@@ -1,0 +1,8 @@
+<use name="FWCore/ParameterSet"/>
+<use name="FWCore/Utilities"/>
+<use name="xgboost"/>
+<use name="PhysicsTools/ONNXRuntime"/>
+<flags CXXFLAGS="-DHDALITZ_HAS_XGBOOST"/>
+<export>
+  <lib name="1"/>
+</export>
