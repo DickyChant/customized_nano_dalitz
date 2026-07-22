@@ -168,3 +168,20 @@ def customizeAllMergedElectron(process, year="2018"):
     """Both merged-electron IDs at once: ZprimeTo4l (GBRForest) + HDalitzEle (XGBoost)."""
     process = customizeMergedElectron(process, year)
     return customizeHDalitzMergedElectron(process)
+
+
+# per-year entry points running BOTH IDs (cmsDriver --customise takes a single dotted name)
+def customizeAllMergedElectron2016APV(process):
+    return customizeAllMergedElectron(process, "2016APV")
+
+
+def customizeAllMergedElectron2016(process):
+    return customizeAllMergedElectron(process, "2016")
+
+
+def customizeAllMergedElectron2017(process):
+    return customizeAllMergedElectron(process, "2017")
+
+
+def customizeAllMergedElectron2018(process):
+    return customizeAllMergedElectron(process, "2018")
