@@ -116,6 +116,54 @@ def customizeMergedElectron2017NoMET(process):
     return dropMET(process)
 
 
+# ---------------------------------------------------------------------------
+# Output slimming for the H->ee-gamma merged-electron analysis.
+# Drops nano tables with no role in the channel to shrink the output (data is ~92% of
+# the total on-disk volume, so these cuts compound over the whole production).
+# ---------------------------------------------------------------------------
+# Only branch-writing table modules are removed -- their upstream producers (finalJets,
+# the AK8 ParticleNet/DeepBoosted taggers, softActivityJets, ProtonProducer inputs, ...) are
+# left in place but go unscheduled once nothing consumes them, so kept tables never break and
+# the heavy taggers simply stop running.
+#   KEEP (per request): Jet(AK4), Electron, Photon, Muon, Tau, boostedTau, CorrT1METJet,
+#                       MET/PuppiMET/DeepMET, SV, PV, trigger, gen.
+#   DROP: LowPtElectron, Proton/PPS, IsoTrack, SoftActivityJet, FatJet/SubJet/AK8(+gen/MC).
+# Exact module names (the module name != the branch/collection name for several of these:
+# SoftActivityJet -> saJetTable/saTable; Proton/PPSLocalTrack -> protonTable+multiRP/singleRP).
+# The proton family MUST drop together: multiRP/singleRP tables read ExtVars from protonTable,
+# so dropping protonTable alone would leave a dangling ref and crash data jobs.
+_SLIM_DROP_EXACT = {
+    "lowPtElectronTable", "lowPtElectronMCTable", "lowPtElectronsMCMatchForTable",  # LowPtElectron
+    "isoTrackTable",                                                                # IsoTrack
+    "saJetTable", "saTable",                                                        # SoftActivity(Jet)
+    "protonTable", "multiRPTable", "singleRPTable", "genProtonTable",               # Proton / PPS
+}
+# FatJet/SubJet/AK8 spans many gen/MC/constituent tables -> match the whole family by substring.
+_SLIM_DROP_SUBSTR = ("fatjet", "subjet", "ak8")
+
+
+def slimNanoDalitz(process):
+    victims = sorted(n for n in list(process.producers_())
+                     if n in _SLIM_DROP_EXACT
+                     or (n.endswith("Table") and any(s in n.lower() for s in _SLIM_DROP_SUBSTR)))
+    for coll in list(process.paths_().values()) + list(process.endpaths_().values()) \
+              + list(process.tasks_().values()):
+        for v in victims:
+            if hasattr(process, v):
+                coll.remove(getattr(process, v))
+    print("[NanoDalitz] slimNanoDalitz dropped %d tables: %s" % (len(victims), victims))
+    return process
+
+
+# NOTE on boostedTau + the _15X twins: running the Run2 (106Xv2-modifier) boostedTau nano
+# table under a 15_0 release on UL MiniAOD is not viable -- the modifier adds the boostedTau
+# 'againstEle' MVA6 discriminant and `linkedObjects` consumes `finalBoostedTaus`, so the
+# discriminant runs unconditionally and asks the EventSetup for a GBRForest labelled
+# 'RecoTauTag_antiElectronMVA_NoEleMatch_..._BL' that the UL conditions ship only under a
+# different name (NoProductResolverException). boostedTau is therefore produced on the native
+# 10_6 Run2 path (and on Run3), not on the _15X twins.  See docs / the crab README.
+
+
 # convenience per-year entry points (cmsDriver --customise takes a single dotted name)
 def customizeMergedElectron2016APV(process):
     return customizeMergedElectron(process, "2016APV")

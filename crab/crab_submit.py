@@ -20,13 +20,19 @@ STORAGE_SITE = os.environ.get("CND_SITE", "T2_CH_CERN")
 UNITS_PER_JOB = int(os.environ.get("CND_UNITS", "2"))     # MINIAOD files per job
 
 
-def make_pset(s):
+SLIM_CUSTOMISE = "PhysicsTools/NanoDalitz/nano_cff.slimNanoDalitz"
+
+
+def make_pset(s, slim=False):
     pset = "pset_%s.py" % s["name"]
     tier = "NANOAOD" if s["isData"] else "NANOAODSIM"
+    customise = s["customise"]
+    if slim:                       # append the H->eeg output-slimming customise (drops
+        customise += "," + SLIM_CUSTOMISE   # LowPtElectron/Proton-PPS/IsoTrack/SoftActivity/AK8)
     cmd = ["cmsDriver.py", "nanoDalitz_%s" % s["name"], "-s", "NANO",
            "--data" if s["isData"] else "--mc",
            "--era", s["era"], "--conditions", s["globaltag"],
-           "--customise", s["customise"],
+           "--customise", customise,
            "--eventcontent", tier, "--datatier", tier,
            "--filein", "file:dummy.root", "--fileout", "file:nano.root",
            "-n", "-1", "--no_exec", "--python_filename", pset]
@@ -35,8 +41,8 @@ def make_pset(s):
     return pset
 
 
-def submit(s, dryrun):
-    pset = make_pset(s)
+def submit(s, dryrun, slim=False):
+    pset = make_pset(s, slim=slim)
     if dryrun:
         print("[dryrun] PSet ready:", pset, "\n"); return
     from CRABClient.UserUtilities import config
@@ -59,7 +65,9 @@ def submit(s, dryrun):
     c.Data.outputDatasetTag = s["name"]
     if s["isData"] and s.get("lumimask"):
         lm = s["lumimask"]
-        c.Data.lumiMask = os.environ.get("CND_GOLDEN_JSON", lm) if lm == "GOLDEN_2018" else lm
+        # placeholder tags (GOLDEN_UL / GOLDEN_2018 / ...) are resolved from CND_GOLDEN_JSON;
+        # a real path in lumimask is used as-is.
+        c.Data.lumiMask = os.environ.get("CND_GOLDEN_JSON", lm) if lm.startswith("GOLDEN") else lm
     c.Site.storageSite = STORAGE_SITE
     print("[submit]", c.General.requestName, "->", s["dataset"])
     crabCommand("submit", config=c)
@@ -72,6 +80,9 @@ def main():
     ap.add_argument("--release", choices=["10_6", "15_0"], help="only submit samples for this release")
     ap.add_argument("--only", nargs="*", default=[], help="submit only these sample name(s)")
     ap.add_argument("--dryrun", action="store_true", help="generate PSets only, do not submit")
+    ap.add_argument("--slim", action="store_true",
+                    help="append slimNanoDalitz (drop LowPtElectron/Proton-PPS/IsoTrack/SoftActivity/AK8) "
+                         "-> ~23%% smaller data, ~15%% smaller MC")
     a = ap.parse_args()
     os.environ.setdefault("X509_USER_PROXY", PROXY)
     SAMPLES = importlib.import_module(a.samples).SAMPLES
@@ -81,10 +92,11 @@ def main():
               and (not a.only or s["name"] in a.only)]
     if not picked:
         sys.exit("no samples matched (release=%s only=%s)" % (a.release, a.only))
-    print("proxy:", os.environ["X509_USER_PROXY"], "| out:", OUT_LFN_BASE, "| site:", STORAGE_SITE)
+    print("proxy:", os.environ["X509_USER_PROXY"], "| out:", OUT_LFN_BASE, "| site:", STORAGE_SITE,
+          "| slim:", a.slim)
     print("samples:", [s["name"] for s in picked], "\n")
     for s in picked:
-        submit(s, a.dryrun)
+        submit(s, a.dryrun, slim=a.slim)
 
 
 if __name__ == "__main__":
