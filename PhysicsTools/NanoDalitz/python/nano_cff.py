@@ -125,14 +125,15 @@ def customizeMergedElectron2017NoMET(process):
 # the AK8 ParticleNet/DeepBoosted taggers, softActivityJets, ProtonProducer inputs, ...) are
 # left in place but go unscheduled once nothing consumes them, so kept tables never break and
 # the heavy taggers simply stop running.
-#   KEEP (per request): Jet(AK4), Electron, Photon, Muon, Tau, boostedTau, CorrT1METJet,
+#   KEEP (per request): Jet(AK4), Electron, Photon, Muon, Tau, CorrT1METJet,
 #                       MET/PuppiMET/DeepMET, SV, PV, trigger, gen.
-#   DROP: LowPtElectron, Proton/PPS, IsoTrack, SoftActivityJet, FatJet/SubJet/AK8(+gen/MC).
+#   DROP: boostedTau, LowPtElectron, Proton/PPS, IsoTrack, SoftActivityJet, FatJet/SubJet/AK8(+gen/MC).
 # Exact module names (the module name != the branch/collection name for several of these:
 # SoftActivityJet -> saJetTable/saTable; Proton/PPSLocalTrack -> protonTable+multiRP/singleRP).
 # The proton family MUST drop together: multiRP/singleRP tables read ExtVars from protonTable,
 # so dropping protonTable alone would leave a dangling ref and crash data jobs.
 _SLIM_DROP_EXACT = {
+    "boostedTauTable", "boostedTauMCTable",                                         # boostedTau
     "lowPtElectronTable", "lowPtElectronMCTable", "lowPtElectronsMCMatchForTable",  # LowPtElectron
     "isoTrackTable",                                                                # IsoTrack
     "saJetTable", "saTable",                                                        # SoftActivity(Jet)
@@ -151,7 +152,14 @@ def slimNanoDalitz(process):
         for v in victims:
             if hasattr(process, v):
                 coll.remove(getattr(process, v))
-    print("[NanoDalitz] slimNanoDalitz dropped %d tables: %s" % (len(victims), victims))
+    # boostedTau: removing its tables is not enough -- linkedObjects consumes finalBoostedTaus, which
+    # drags in the anti-electron MVA6 discriminant (and, on 15_0-over-UL, a missing GBRForest ES).
+    # The PATObjectCrossLinker guards every boostedTau use on a non-empty label, so detaching the
+    # input here leaves the whole boostedTau producer chain unscheduled.
+    if hasattr(process, "linkedObjects"):
+        process.linkedObjects.boostedTaus = cms.InputTag("")
+    print("[NanoDalitz] slimNanoDalitz dropped %d tables: %s (+ detached linkedObjects.boostedTaus)"
+          % (len(victims), victims))
     return process
 
 
