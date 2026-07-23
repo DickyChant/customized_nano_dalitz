@@ -80,11 +80,13 @@ GT and `customizeAllMergedElectron<year>` (both IDs), and the **same era incl. `
 That modifier is required: native v15 nano over UL MiniAOD aborts (`pvbsTable` wants
 `offlineSlimmedPrimaryVerticesWithBS`, absent in UL MiniAODv2). So a `_15X` job produces the same
 106Xv2-schema nano as the 10_6 path, just from the newer release.
-> ⚠️ **boostedTau is NOT produced on the `_15X` twins.** Under the 106Xv2 modifier the boostedTau
-> `againstEle` MVA6 discriminant runs (via `linkedObjects`) and asks for a GBRForest the UL conditions
-> ship under a different label → `NoProductResolverException`. boostedTau IS produced on the native
-> 10_6 Run2 path and on Run3. Given the `_15X` twins otherwise duplicate the 10_6 content (and double
-> the ~9 TB data volume), consider whether they are worth submitting.
+> ⚠️ **The `_15X` twins require `--slim`.** Under the 106Xv2 modifier the boostedTau `againstEle` MVA6
+> discriminant runs (via `linkedObjects`) and asks for a GBRForest the UL conditions ship under a
+> different label → `NoProductResolverException`. `--slim` drops boostedTau (and detaches
+> `linkedObjects.boostedTaus`), which removes that chain — so a `_15X --slim` job runs clean end-to-end
+> over UL MiniAOD (validated: ttH_M125 UL18, 100 ev, RC=0). Without `--slim` the twins crash. Note they
+> still duplicate the 10_6 content and double the ~9 TB data volume, so weigh whether to submit them at
+> all (the clean split is Run2→10_6, Run3→15_0).
 
 Submit with `--samples` (release filter picks the CMSSW build — build that release's area first):
 ```sh
@@ -97,17 +99,19 @@ Data needs the per-year/period golden JSON via `CND_GOLDEN_JSON` (any `GOLDEN*` 
 resolved from it). Run2 runs `customizeAllMergedElectron<year>` (both IDs); Run3 runs
 `customizeHDalitzMergedElectron` (HDalitz only). **221 entries**: 104 Run2·10_6 + 104 Run2·15X + 13 Run3.
 
-## Output slimming — `--slim`
+## Output slimming — `--slim` (recommended default)
 Add `--slim` to any submit to append `nano_cff.slimNanoDalitz`, which drops nano tables with no role
-in H→eeγ. **Kept** (per analysis): Jet(AK4), Electron(+merged IDs), Photon, Muon, **Tau, boostedTau,
-CorrT1METJet, MET/PuppiMET/DeepMET**, SV, PV, trigger, gen. **Dropped**: LowPtElectron, Proton/PPS
+in H→eeγ. **Kept** (per analysis): Jet(AK4), Electron(+merged IDs), Photon, Muon, **Tau, CorrT1METJet,
+MET/PuppiMET/DeepMET**, SV, PV, trigger, gen. **Dropped**: **boostedTau**, LowPtElectron, Proton/PPS
 (`protonTable`+`multiRP`/`singleRP`), IsoTrack, SoftActivityJet (`saJetTable`/`saTable`),
-FatJet/SubJet/AK8 (+ their gen/MC/constituent tables) — 18 table producers; their upstream producers
-(incl. the heavy AK8 ParticleNet/DeepBoosted taggers) go unscheduled, so it also saves CPU.
+FatJet/SubJet/AK8 (+ their gen/MC/constituent tables) — 20 table producers; their upstream producers
+(incl. the heavy AK8 ParticleNet/DeepBoosted taggers, and the whole boostedTau discriminant chain via
+the detached `linkedObjects.boostedTaus`) go unscheduled, so it also saves CPU.
 ```sh
 python crab_submit.py --samples samples_AN21053 --release 10_6 --slim         # slimmed Run2
 python crab_submit.py --samples samples_AN21053 --release 15_0 --slim --dryrun # inspect slimmed PSet
 ```
-Savings (measured from the official NanoAODv9 per-collection breakdown): **~23% smaller data files,
-~15% smaller MC**. Since the production is ~92% data bytes, that's **~2.5–3 TB off the ~9.8 TB total**.
-Nothing physics-relevant to the channel is removed; safe to run by default.
+Savings (measured from the official NanoAODv9 per-collection breakdown): **~24% smaller data files,
+~16% smaller MC**. Since the production is ~92% data bytes, that's **~2.5–3 TB off the ~9.8 TB total**.
+Nothing physics-relevant to the channel is removed — run it by default (and it is **required** for the
+`_15X` twins, which otherwise crash on the boostedTau ES).
