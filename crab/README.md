@@ -75,12 +75,19 @@ resonances) to `samples.py` the same way. Start small: `--only DYJetsToLL_M50_UL
 - No Run3 Dalitz **signal** exists in DAS (the AN is Run2). 2024 is prompt-only — extend if wanted.
 - Verified: the HDalitz merged-ID producer runs on Run3 MINIAOD unchanged (branches filled) — ID works out of the box.
 
-Submit with `--samples` (release filter picks Run2 vs Run3):
+**Run2 also via CMSSW_15_0_X** (`_15X` twins of every Run2 entry, `release="15_0"`): same UL dataset,
+GT and `customizeAllMergedElectron<year>` (both IDs), but the era drops the `run2_nanoAOD_106Xv2`
+modifier so 15_0 emits its **native (v14/v15) NanoAOD** layout instead of forcing v9. Validated: the
+customise applies cleanly to a `Run2_201X` process in 15_0 (cmsDriver RC=0; `electronTable` present and
+gets the ExtVars). So `--release 15_0` runs the Run2 twins + the Run3 ID-test = 117 tasks.
+
+Submit with `--samples` (release filter picks the CMSSW build — build that release's area first):
 ```sh
-python crab_submit.py --samples samples_AN21053 --release 10_6 --dryrun   # Run2 sanity (PSets only)
-python crab_submit.py --samples samples_AN21053 --release 10_6            # all 104 Run2 (rerun set)
-python crab_submit.py --samples samples_AN21053 --release 15_0            # all 13 Run3 (ID test)
-python crab_submit.py --samples samples_AN21053 --only GluGluHToEEG_M125_UL18
+python crab_submit.py --samples samples_AN21053 --release 10_6 --dryrun   # Run2 v9 sanity (PSets only)
+python crab_submit.py --samples samples_AN21053 --release 10_6            # 104 Run2 via 10_6 (v9 nano)
+python crab_submit.py --samples samples_AN21053 --release 15_0            # 104 Run2 (_15X, v14 nano) + 13 Run3
+python crab_submit.py --samples samples_AN21053 --only GluGluHToEEG_M125_UL18_15X
 ```
 Data needs the per-year/period golden JSON via `CND_GOLDEN_JSON`. Run2 runs
 `customizeAllMergedElectron<year>` (both IDs); Run3 runs `customizeHDalitzMergedElectron` (HDalitz only).
+**221 entries** total: 104 Run2·10_6 + 104 Run2·15X + 13 Run3.
