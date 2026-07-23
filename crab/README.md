@@ -62,17 +62,25 @@ resonances) to `samples.py` the same way. Start small: `--only DYJetsToLL_M50_UL
 `CND_UNITS` for a quick end-to-end check before launching the full set.
 
 ## AN-21-053 (Higgs Dalitz, electron channel) sample list
-`samples_AN21053.py` — the H→γ*γ→eeγ samples from CMS AN-21-053, DAS-resolved:
-- **Signal (EEG)**: GluGluH/VBFH/WH/ZH × M120/125/130 × UL16APV/16/17/18 = 48 datasets (nominal TuneCP5).
-- **Data**: DoubleEG+SingleElectron (2016/2017) + EGamma (2018), UL MiniAODv2 = 32 datasets.
-- **Background**: none — data-driven continuum fit (AN §2.3).
-- ttH/bbH EEG are **not** in central DAS (add their private path when available).
+`samples_AN21053.py` — the H→γ*γ→eeγ samples from CMS AN-21-053, DAS-resolved (117 total).
 
-Submit with `--samples`:
+**Run2 = the full set to rerun the analysis** (`release="10_6"`, both merged-electron IDs):
+- **Signal (EEG)**: all 6 modes GluGluH/VBFH/WH/ZH/**ttH/bbH** × M120/125/130 × UL16APV/16/17/18 = **72** (nominal TuneCP5).
+- **Data**: DoubleEG+SingleElectron (2016/2017) + EGamma (2018), UL MiniAODv2 = **32**.
+- **Background**: none — data-driven continuum fit (AN §2.3).
+
+**Run3 = out-of-the-box ID test** (`release="15_0"`, HDalitz ID only — the ZprimeTo4l models are Run2-trained):
+- **DY**: `DYto2E_M-50` powheg, Run3Summer22 pre/postEE = 2.
+- **Data**: EGamma 2022 C–G + EGamma0/1 2023 B/C/D (22Sep2023 rereco) = 11.
+- No Run3 Dalitz **signal** exists in DAS (the AN is Run2). 2024 is prompt-only — extend if wanted.
+- Verified: the HDalitz merged-ID producer runs on Run3 MINIAOD unchanged (branches filled) — ID works out of the box.
+
+Submit with `--samples` (release filter picks Run2 vs Run3):
 ```sh
-python crab_submit.py --samples samples_AN21053 --release 10_6 --dryrun   # sanity
+python crab_submit.py --samples samples_AN21053 --release 10_6 --dryrun   # Run2 sanity (PSets only)
+python crab_submit.py --samples samples_AN21053 --release 10_6            # all 104 Run2 (rerun set)
+python crab_submit.py --samples samples_AN21053 --release 15_0            # all 13 Run3 (ID test)
 python crab_submit.py --samples samples_AN21053 --only GluGluHToEEG_M125_UL18
-python crab_submit.py --samples samples_AN21053                            # all 80
 ```
-Data needs the per-year golden JSON via `CND_GOLDEN_JSON`. Each sample runs
-`customizeAllMergedElectron<year>` (both merged-electron IDs on the Electron table).
+Data needs the per-year/period golden JSON via `CND_GOLDEN_JSON`. Run2 runs
+`customizeAllMergedElectron<year>` (both IDs); Run3 runs `customizeHDalitzMergedElectron` (HDalitz only).
