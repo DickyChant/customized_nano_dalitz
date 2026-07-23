@@ -434,7 +434,7 @@ SAMPLES = [
          era="Run2_2017,run2_nanoAOD_106Xv2", globaltag="106X_dataRun2_v35",
          customise="PhysicsTools/NanoDalitz/nano_cff.customizeAllMergedElectron2017"),
 
-    # ============ RUN2 via CMSSW_15_0_X (native v14/v15 nano; same UL GT+conditions, both IDs) ============
+    # ============ RUN2 via CMSSW_15_0_X (native v15 nano; same UL GT+conditions, both IDs) ============
     # Twins of the release=10_6 Run2 set above (name suffix _15X). Submit with --release 15_0.
     dict(name="GluGluHToEEG_M120_UL16_15X", release="15_0", isData=False,
          dataset="/GluGluHToEEG_M120_Dalitz_012j_TuneCP5_13TeV_amcatnlo_pythia8/RunIISummer20UL16MiniAODv2-106X_mcRun2_asymptotic_v17-v1/MINIAODSIM",
