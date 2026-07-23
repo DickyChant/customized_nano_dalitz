@@ -76,18 +76,38 @@ resonances) to `samples.py` the same way. Start small: `--only DYJetsToLL_M50_UL
 - Verified: the HDalitz merged-ID producer runs on Run3 MINIAOD unchanged (branches filled) — ID works out of the box.
 
 **Run2 also via CMSSW_15_0_X** (`_15X` twins of every Run2 entry, `release="15_0"`): same UL dataset,
-GT and `customizeAllMergedElectron<year>` (both IDs), but the era drops the `run2_nanoAOD_106Xv2`
-modifier so 15_0 emits its **native v15 NanoAOD** layout instead of forcing v9. Validated: the
-customise applies cleanly to a `Run2_201X` process in 15_0 (cmsDriver RC=0; `electronTable` present and
-gets the ExtVars). So `--release 15_0` runs the Run2 twins + the Run3 ID-test = 117 tasks.
+GT and `customizeAllMergedElectron<year>` (both IDs), and the **same era incl. `run2_nanoAOD_106Xv2`**.
+That modifier is required: native v15 nano over UL MiniAOD aborts (`pvbsTable` wants
+`offlineSlimmedPrimaryVerticesWithBS`, absent in UL MiniAODv2). So a `_15X` job produces the same
+106Xv2-schema nano as the 10_6 path, just from the newer release.
+> ⚠️ **boostedTau is NOT produced on the `_15X` twins.** Under the 106Xv2 modifier the boostedTau
+> `againstEle` MVA6 discriminant runs (via `linkedObjects`) and asks for a GBRForest the UL conditions
+> ship under a different label → `NoProductResolverException`. boostedTau IS produced on the native
+> 10_6 Run2 path and on Run3. Given the `_15X` twins otherwise duplicate the 10_6 content (and double
+> the ~9 TB data volume), consider whether they are worth submitting.
 
 Submit with `--samples` (release filter picks the CMSSW build — build that release's area first):
 ```sh
-python crab_submit.py --samples samples_AN21053 --release 10_6 --dryrun   # Run2 v9 sanity (PSets only)
-python crab_submit.py --samples samples_AN21053 --release 10_6            # 104 Run2 via 10_6 (v9 nano)
-python crab_submit.py --samples samples_AN21053 --release 15_0            # 104 Run2 (_15X, v15 nano) + 13 Run3
+python crab_submit.py --samples samples_AN21053 --release 10_6 --dryrun   # Run2 sanity (PSets only)
+python crab_submit.py --samples samples_AN21053 --release 10_6            # 104 Run2 via 10_6 (native)
+python crab_submit.py --samples samples_AN21053 --release 15_0            # 104 Run2 (_15X) + 13 Run3
 python crab_submit.py --samples samples_AN21053 --only GluGluHToEEG_M125_UL18_15X
 ```
-Data needs the per-year/period golden JSON via `CND_GOLDEN_JSON`. Run2 runs
-`customizeAllMergedElectron<year>` (both IDs); Run3 runs `customizeHDalitzMergedElectron` (HDalitz only).
-**221 entries** total: 104 Run2·10_6 + 104 Run2·15X + 13 Run3.
+Data needs the per-year/period golden JSON via `CND_GOLDEN_JSON` (any `GOLDEN*` lumimask tag is
+resolved from it). Run2 runs `customizeAllMergedElectron<year>` (both IDs); Run3 runs
+`customizeHDalitzMergedElectron` (HDalitz only). **221 entries**: 104 Run2·10_6 + 104 Run2·15X + 13 Run3.
+
+## Output slimming — `--slim`
+Add `--slim` to any submit to append `nano_cff.slimNanoDalitz`, which drops nano tables with no role
+in H→eeγ. **Kept** (per analysis): Jet(AK4), Electron(+merged IDs), Photon, Muon, **Tau, boostedTau,
+CorrT1METJet, MET/PuppiMET/DeepMET**, SV, PV, trigger, gen. **Dropped**: LowPtElectron, Proton/PPS
+(`protonTable`+`multiRP`/`singleRP`), IsoTrack, SoftActivityJet (`saJetTable`/`saTable`),
+FatJet/SubJet/AK8 (+ their gen/MC/constituent tables) — 18 table producers; their upstream producers
+(incl. the heavy AK8 ParticleNet/DeepBoosted taggers) go unscheduled, so it also saves CPU.
+```sh
+python crab_submit.py --samples samples_AN21053 --release 10_6 --slim         # slimmed Run2
+python crab_submit.py --samples samples_AN21053 --release 15_0 --slim --dryrun # inspect slimmed PSet
+```
+Savings (measured from the official NanoAODv9 per-collection breakdown): **~23% smaller data files,
+~15% smaller MC**. Since the production is ~92% data bytes, that's **~2.5–3 TB off the ~9.8 TB total**.
+Nothing physics-relevant to the channel is removed; safe to run by default.
