@@ -12,8 +12,7 @@ Usage (lxplus, inside the CMSSW_X/src area after `cmsenv`):
     python crab_submit.py --only DYJetsToLL_M50_UL18     # a single sample
     python crab_submit.py --release 10_6 --dryrun        # just generate PSets, don't submit
 """
-import argparse, os, subprocess, sys
-from samples import SAMPLES
+import argparse, importlib, os, subprocess, sys
 
 PROXY = os.environ.get("X509_USER_PROXY", "/eos/user/s/sqian/.proxy")
 OUT_LFN_BASE = os.environ.get("CND_OUTLFN", "/store/user/sqian/nanoDalitz")
@@ -69,11 +68,14 @@ def submit(s, dryrun):
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--samples", default="samples", help="sample module to import (e.g. samples_AN21053)")
     ap.add_argument("--release", choices=["10_6", "15_0"], help="only submit samples for this release")
     ap.add_argument("--only", nargs="*", default=[], help="submit only these sample name(s)")
     ap.add_argument("--dryrun", action="store_true", help="generate PSets only, do not submit")
     a = ap.parse_args()
     os.environ.setdefault("X509_USER_PROXY", PROXY)
+    SAMPLES = importlib.import_module(a.samples).SAMPLES
+    print("samples module:", a.samples, "(%d entries)" % len(SAMPLES))
     picked = [s for s in SAMPLES
               if (not a.release or s["release"] == a.release)
               and (not a.only or s["name"] in a.only)]

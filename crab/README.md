@@ -60,3 +60,19 @@ Output lands under `root://eoscms//eos/cms/store/user/sqian/nanoDalitz/<primaryD
 These are DY tag/probe & data samples for a first pass; add signal (e.g. `GluGluHToZG`, low-mass
 resonances) to `samples.py` the same way. Start small: `--only DYJetsToLL_M50_UL18` with a high
 `CND_UNITS` for a quick end-to-end check before launching the full set.
+
+## AN-21-053 (Higgs Dalitz, electron channel) sample list
+`samples_AN21053.py` — the H→γ*γ→eeγ samples from CMS AN-21-053, DAS-resolved:
+- **Signal (EEG)**: GluGluH/VBFH/WH/ZH × M120/125/130 × UL16APV/16/17/18 = 48 datasets (nominal TuneCP5).
+- **Data**: DoubleEG+SingleElectron (2016/2017) + EGamma (2018), UL MiniAODv2 = 32 datasets.
+- **Background**: none — data-driven continuum fit (AN §2.3).
+- ttH/bbH EEG are **not** in central DAS (add their private path when available).
+
+Submit with `--samples`:
+```sh
+python crab_submit.py --samples samples_AN21053 --release 10_6 --dryrun   # sanity
+python crab_submit.py --samples samples_AN21053 --only GluGluHToEEG_M125_UL18
+python crab_submit.py --samples samples_AN21053                            # all 80
+```
+Data needs the per-year golden JSON via `CND_GOLDEN_JSON`. Each sample runs
+`customizeAllMergedElectron<year>` (both merged-electron IDs on the Electron table).
