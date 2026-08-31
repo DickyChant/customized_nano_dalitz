@@ -150,6 +150,29 @@ For `CMSSW_15_0_X`, use `cmsrel CMSSW_15_0_X`, the matching UL18 (or Run3) Globa
 the same `--customise` path. Expect to fix compile errors from EventSetup token migration
 first — see `docs/PLAN_CMSSW_15_0.md`.
 
+## Where this actually runs: FNAL LPC (cmslpc)
+
+Development and grid production happen on **cmslpc**, native el9 (`el9_amd64_gcc12`) — the 15_0
+branch needs no container. `scripts/build_lpc_150.sh` creates
+`/uscms_data/d3/sitianq/nu_dalitz/CMSSW_15_0_20` and rsyncs `ZprimeTo4l/`, `PhysicsTools/` and
+`HDalitzEle/` in from this repo; re-run it after editing package code.
+
+CRAB submission lives in `crab/` and is LPC-configured (proxy under `/uscms/home/$USER/`,
+`T3_US_FNALLPC`, golden JSONs vendored in `crab/jsons/`). **Read `crab/README.md` before
+submitting anything** — it carries the storage/quota checks, the memory-sizing rule, the
+multithreading measurements and the production gotchas. Key points that bite:
+
+- **Storage is the binding constraint.** `/store/user/sqian` on FNAL EOS is a symlink to
+  `/store/user/sitianq`; one ~2 TB quota, already ~92% full. The full AN-21-053 set is ~7-10 TB
+  and belongs at **IHEP / T2_CN_Beijing** (509 TB free), via `CND_SITE` + `CND_OUTLFN`.
+- **Memory** = `max(measured need, numCores * 2000 MB)` — 2 GB/core is the minimal grid slot, so
+  asking less buys nothing and asking more narrows site matching. Under-requesting gets jobs
+  killed with exit 50660.
+- **Threading is validated**: 1/2/4-thread output is bit-identical across all six merged-ID
+  branches, and 4 threads runs ~3.8x faster on the event loop for ~+900 MB. Benchmark with
+  `scripts/bench_threads.sh` (writes to the 3DayLifetime scratch, not the project area).
+- Scratch for large test files: `/uscmst1b_scratch/lpc1/3DayLifetime/$USER/`.
+
 ## Planning docs
 
 Read these before implementing — they contain the actual step-by-step work and the API

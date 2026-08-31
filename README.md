@@ -46,6 +46,24 @@ For Run3, use `--era Run3` and a Run3 GlobalTag (15_0 branch). The producers are
 the shipped HDalitz models are Run2-UL-trained, so Run3 scores run but are not Run3-calibrated
 (retrain → `save_model` → `scripts/hdalitz_convert_onnx.py` → drop-in the new `.onnx`).
 
+## Production at FNAL LPC (cmslpc)
+Grid production is driven from `crab/` and is set up for **cmslpc**, native el9 — no container
+needed for the 15_0 branch. Full instructions and tuning notes: **[`crab/README.md`](crab/README.md)**.
+
+```sh
+./scripts/build_lpc_150.sh          # one-time: CMSSW_15_0_20 area + packages (rsynced from this repo)
+./crab/jsons/fetch.sh               # one-time: Run2 golden JSONs for the data lumimasks
+cd crab/ && python3 crab_submit.py --samples samples_AN21053 --release 15_0 \
+              --slim --nthreads 4 --units 8
+```
+
+Defaults worth knowing before a large submission:
+- **Output site.** `CND_SITE` / `CND_OUTLFN` pick the storage element. Note `/store/user/sqian`
+  on FNAL EOS is a *symlink to* `/store/user/sitianq` — one quota, ~2 TB, which the full
+  AN-21-053 set (~7–10 TB) does **not** fit. Check quotas before submitting (see below).
+- **`--slim` is effectively required** for the `_15X` twins and cuts ~24% (data) / ~16% (MC).
+- **`--nthreads 4`** gives ~3.8x on the event loop for ~+900 MB; see `crab/README.md`.
+
 ## Models
 Committed: the ONNX runtime models (`HDalitzEle/MergedID/data/*.onnx`) and the ZprimeTo4l
 GBRForest weights (`ZprimeTo4l/MergedLepton/data/*.{xml,csv}`). The large xgboost-native

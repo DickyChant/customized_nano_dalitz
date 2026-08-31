@@ -10,9 +10,8 @@ Branch note:
 Run only the entries appropriate to the release you checked out (submit.py filters by --release).
 """
 
-# UL golden JSON for data (adjust the path on lxplus if needed)
-GOLDEN_2018 = ("/cvmfs/cms-bril.cern.ch/cms-lumi-pog/Normtags/../.."  # placeholder root
-               )  # see README: use the official Cert_..._Legacy2018_Collisions18_JSON.txt
+# UL golden JSON for data: GOLDEN* tags resolve per-era from crab/jsons/ (see crab_submit.py)
+GOLDEN_2018 = "GOLDEN_2018"
 
 SAMPLES = [
     # ---- Run2 UL MC (both branches) : DY M-50 amcatnloFXFX ----

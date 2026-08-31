@@ -12,3 +12,8 @@ HDalitzEle/MergedID/data/*.json
 *.root
 *.log
 nano*_cfg.py
+# crab work products
+crab/pset_*.py
+crab/crab_projects/
+# golden JSONs are vendored by crab/jsons/fetch.sh, not committed
+crab/jsons/Cert_*.txt

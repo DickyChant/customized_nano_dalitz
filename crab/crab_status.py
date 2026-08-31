@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Status / resubmit / kill helper for the customized-NanoAOD CRAB tasks (run on lxplus).
+"""Status / resubmit / kill helper for the customized-NanoAOD CRAB tasks (run on cmslpc).
 
     python crab_status.py status    [<requestName-substr>]
     python crab_status.py resubmit  [<requestName-substr>]
@@ -7,7 +7,7 @@
     python crab_status.py report    [<requestName-substr>]   # completed-lumi/eff report
 """
 import os, sys, glob
-os.environ.setdefault("X509_USER_PROXY", "/eos/user/s/sqian/.proxy")
+os.environ.setdefault("X509_USER_PROXY", "/uscms/home/sitianq/x509up_u25265")
 from CRABAPI.RawCommand import crabCommand
 
 def projects(sub):

@@ -1,21 +1,25 @@
 # CRAB production — customized NanoAOD (merged-electron IDs)
 
 Produces the customized NanoAOD (with `Electron_mvaMergedElectron` + `Electron_mvaHDalitzMergedID*`)
-from official MINIAOD, one CRAB task per sample. **Submit from lxplus** (needs `CRABClient` +
-HTCondor; this cannot run on a plain worker node).
+from official MINIAOD, one CRAB task per sample. **Submit from cmslpc** (FNAL LPC; needs
+`CRABClient`; this cannot run on a plain worker node).
 
-## One-time per session (lxplus)
+## One-time setup (cmslpc)
 ```sh
-# inside your CMSSW_15_0_X/src (or CMSSW_10_6_X/src) area, already built:
-cmsenv
+# build the CMSSW area (el9 native, CMSSW_15_0_20) — one time:
+./scripts/build_lpc_150.sh          # creates /uscms_data/d3/sitianq/nu_dalitz/CMSSW_15_0_20
+
+# fetch the Run2 golden JSONs (data lumimasks resolve from here automatically):
+./crab/jsons/fetch.sh
+```
+
+## Per session (cmslpc)
+```sh
+cd /uscms_data/d3/sitianq/nu_dalitz/CMSSW_15_0_20/src && cmsenv
 source /cvmfs/cms.cern.ch/common/crab-setup.sh
 
-# proxy — either reuse the stored one, or (re)create it into that path:
-voms-proxy-init --rfc --voms cms --valid 168:00 --out /eos/user/s/sqian/.proxy
-export X509_USER_PROXY=/eos/user/s/sqian/.proxy
-
-# data golden JSON (only needed if you submit the data sample):
-export CND_GOLDEN_JSON=/cvmfs/cms-bril.cern.ch/cms-lumi-pog/CertificationFiles/... # official Legacy2018 JSON
+# proxy (default location is fine on LPC):
+voms-proxy-init --rfc --voms cms --valid 168:00
 ```
 
 ## Submit
@@ -39,13 +43,19 @@ python crab_status.py report                 # processed-lumi / eff (data)
 ## Config knobs (env vars, read by crab_submit.py)
 | var | default | meaning |
 |---|---|---|
-| `X509_USER_PROXY` | `/eos/user/s/sqian/.proxy` | grid proxy |
-| `CND_OUTLFN` | `/store/user/sqian/nanoDalitz` | output base LFN |
-| `CND_SITE` | `T2_CH_CERN` | storage site |
-| `CND_UNITS` | `2` | MINIAOD files per job (FileBased splitting) |
-| `CND_GOLDEN_JSON` | — | lumimask for the data sample |
+| `X509_USER_PROXY` | `/uscms/home/sitianq/x509up_u25265` | grid proxy |
+| `CND_OUTLFN` | `/store/user/sqian/nanoDalitz` | output base LFN (CRAB wants the **CERN** username) |
+| `CND_SITE` | `T3_US_FNALLPC` | storage site |
+| `CND_UNITS` | `2` | MINIAOD files per job (FileBased splitting); `--units` overrides |
+| `CND_THREADS` | `1` | cmsRun threads == CRAB `numCores`; `--nthreads` overrides |
+| `CND_MEM_FLOOR` | `4000` | 1-thread memory need (the chain peaks at ~3.5 GB) |
+| `CND_MEM_PER_THREAD` | `500` | added need per extra thread (measured ~305 + headroom) |
+| `CND_MEM_PER_CORE_MIN` | `2000` | minimal grid slot per core — the request never goes below `N * this` |
+| `CND_GOLDEN_JSON` | — | override lumimask (default: per-era JSON from `jsons/`) |
 
-Output lands under `root://eoscms//eos/cms/store/user/sqian/nanoDalitz/<primaryDS>/<name>/…`.
+Output lands under `root://cmseos.fnal.gov//store/user/sqian/nanoDalitz/<primaryDS>/<name>/…`.
+Data lumimasks resolve automatically: a `GOLDEN*` tag picks the per-era UL golden JSON from
+`crab/jsons/` (run `jsons/fetch.sh` once); `CND_GOLDEN_JSON` overrides if set.
 
 ## Samples (validated via DAS 2026-07-22)
 | name | files | events | era |
@@ -95,9 +105,98 @@ python crab_submit.py --samples samples_AN21053 --release 10_6            # 104 
 python crab_submit.py --samples samples_AN21053 --release 15_0            # 104 Run2 (_15X) + 13 Run3
 python crab_submit.py --samples samples_AN21053 --only GluGluHToEEG_M125_UL18_15X
 ```
-Data needs the per-year/period golden JSON via `CND_GOLDEN_JSON` (any `GOLDEN*` lumimask tag is
-resolved from it). Run2 runs `customizeAllMergedElectron<year>` (both IDs); Run3 runs
+Data lumimasks (`GOLDEN*` tags) resolve automatically from `crab/jsons/` per era
+(`CND_GOLDEN_JSON` overrides). Run2 runs `customizeAllMergedElectron<year>` (both IDs); Run3 runs
 `customizeHDalitzMergedElectron` (HDalitz only). **221 entries**: 104 Run2·10_6 + 104 Run2·15X + 13 Run3.
+
+## Multithreading — `--nthreads` (recommended for the remaining production)
+
+`--nthreads N` sets both `cmsDriver --nThreads N` and CRAB `numCores = N`, and sizes the memory
+request as **`max(measured need, N * 2000 MB)`**: a grid slot is carved at >= 2 GB per core, so an
+N-core slot carries >= N*2 GB whether you ask for it or not — requesting less buys nothing, while
+requesting *more* than N*2000 excludes minimal slots and narrows matching.
+
+| threads | request | MB/core |
+|---|---|---|
+| 1 | 4000 | 4000 |
+| 2 | 4500 | 2250 |
+| 4 | 8000 | 2000 |
+
+Measured on `GluGluHToEEG_M125_UL18` MINIAOD (15956 ev/file, 300-event runs, `scripts/bench_threads.sh`):
+
+| threads | s/event | speedup | min per file | peak RSS | RSS per core |
+|---|---|---|---|---|---|
+| 1 | 0.186 | 1.00x | 49 | 2560 MB | 2560 |
+| 2 | 0.090 | 2.06x | 24 | 2861 MB | 1430 |
+| 4 | 0.048 | 3.83x | 13 | 3475 MB | 868 |
+
+The event loop scales ~linearly (3.8x on 4 threads) while memory grows only ~305 MB per added
+thread — conditions, geometry and the ParticleNet/GBRForest models are per-process, not per-thread.
+So RSS *per core* falls from 2560 MB to 868 MB going 1 -> 4 threads.
+
+**Why this matters more than speed:** a 1-core job needing ~3.5-4 GB asks for more than the
+2500 MB/core the grid guarantees, so CRAB warns and jobs sit idle waiting for a matching slot
+(seen on the first batch). The same job as 2 cores / 5000 MB fits inside the guarantee and matches
+normally.
+
+Not parallelized: a fixed **~3 min startup** (job start to 1st record; almost pure I/O wait on
+Frontier conditions + CVMFS, only ~14 s of CPU) plus ~18 s on the first event. That cost is per
+*job*, so pair `--nthreads` with a larger `--units` to amortize it.
+
+Recommended for the remaining Run2 set (~1.8 h/job, ~3.5-4.5 GB inside a 4x2500 MB request):
+```sh
+python3 crab_submit.py --samples samples_AN21053 --release 15_0 --slim --nthreads 4 --units 8
+```
+Note `numCores` cannot be changed by `crab resubmit` — it is fixed at submission, so switching an
+existing task to multicore means killing it and submitting a new one.
+
+## Storage — check quota BEFORE a large submission
+The full AN-21-053 set is ~7-10 TB even slimmed. Check where it can actually land:
+
+```sh
+# FNAL EOS quota (charged to the unix account; /store/user/sqian is a SYMLINK to /store/user/sitianq)
+eos root://cmseos.fnal.gov quota /eos/uscms/store/user/$USER
+
+# LPC nobackup + home
+quota -s                                  # /uscms_data/d3 (nobackup) and /uscms/home
+
+# IHEP (T2_CN_Beijing). gfal-xattr returns no quota data on this endpoint, so use a
+# WebDAV PROPFIND for the RFC 4331 properties:
+gfal-ls -l https://cceos.ihep.ac.cn:9000/eos/ihep/cms/store/user/sqian
+curl -s --capath /etc/grid-security/certificates --cert $X509_USER_PROXY --key $X509_USER_PROXY \
+  -X PROPFIND -H "Depth: 0" \
+  --data '<?xml version="1.0"?><D:propfind xmlns:D="DAV:"><D:prop><D:quota-available-bytes/><D:quota-used-bytes/></D:prop></D:propfind>' \
+  https://cceos.ihep.ac.cn:9000/eos/ihep/cms/store/user/sqian
+```
+
+Measured 2026-08-29: **LPC EOS 1.85/2.00 TB logical (92%, warning)** vs **IHEP 5.99 TB used,
+509 TB available**. For a full-set production, submit to IHEP:
+```sh
+export CND_SITE=T2_CN_Beijing
+export CND_OUTLFN=/store/user/sqian/nanoDalitz
+```
+Site endpoints come from `/cvmfs/cms.cern.ch/SITECONF/<site>/storage.json`.
+
+Put big test inputs / throwaway outputs in the LPC 3-day scratch, **not** the project area:
+`/uscmst1b_scratch/lpc1/3DayLifetime/$USER/` (`scripts/bench_threads.sh` already defaults there).
+
+## Gotchas seen in production
+- **Jobs killed with exit 50660** = HTCondor memory kill. The chain needs ~3.3-4.3 GB on the
+  grid; `maxMemoryMB` is sized by `job_memory_mb()` (see the multithreading section). A job
+  killed this way reports `N used vs. M requested` in `crab status --verboseErrors`.
+- **`crab resubmit` cannot change `numCores`** (only maxmemory / maxjobruntime / priority), and
+  it only touches *failed* jobs — it cannot re-request memory for idle ones. Switching a task to
+  multicore, or fixing memory on jobs that have not failed, means kill + resubmit.
+- **CRABClient can only submit once per process**: the 2nd and later `crabCommand("submit")`
+  calls fail with an *empty* exception. `crab_submit.py` forks each submit into its own
+  `multiprocessing.Process` (the official multicrab recipe). One failed submit no longer aborts
+  the batch; failures are listed at the end.
+- **Idle jobs are usually data locality, not memory.** 53 of the 72 Run2 signal datasets have a
+  single disk replica, so a task can only run at one site and waits for capacity there. Check
+  with `dasgoclient -query="site dataset=<DS>"` before assuming a config problem; the lever is
+  `Data.ignoreLocality`, not more memory.
+- Killed/superseded CRAB project dirs can be parked in the 3DayLifetime scratch instead of
+  deleted, so the logs survive a few days.
 
 ## Output slimming — `--slim` (recommended default)
 Add `--slim` to any submit to append `nano_cff.slimNanoDalitz`, which drops nano tables with no role
