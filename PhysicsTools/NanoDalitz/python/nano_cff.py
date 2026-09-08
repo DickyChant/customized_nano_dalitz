@@ -210,6 +210,13 @@ def _addMergedEleInputVars(process):
                            doc="dEta(SC seed, track) at vertex")
     v.dPhiSCTrkAtVtx = Var("deltaPhiSuperClusterTrackAtVtx", float, precision=14,
                            doc="dPhi(SC seed, track) at vertex")
+    # Supercluster phi. Nano ships superclusterEta but NOT phi, and it is needed twice over:
+    # it is an input feature of the merged-electron energy regression, and the analysis matches
+    # an electron to a photon by exact SC (eta, phi) equality in the Hgg preselection.
+    v.superclusterPhi = Var("superCluster().phi()", float, precision=14,
+                            doc="supercluster phi")
+    v.superclusterEnergy = Var("superCluster().energy()", float, precision=14,
+                               doc="supercluster energy (corrected; cf. rawEnergy)")
     v.scEtaWidth = Var("superCluster().etaWidth()", float, precision=14, doc="supercluster eta width")
     v.scPhiWidth = Var("superCluster().phiWidth()", float, precision=14, doc="supercluster phi width")
     v.sipip = Var("full5x5_sigmaIphiIphi()", float, precision=14, doc="full5x5 sigma_iphiiphi")
@@ -228,6 +235,14 @@ def _addMergedEleInputVars(process):
                     doc="PF pileup isolation (absolute, dR=0.3)")
     v.ecalPFClusIso = Var("ecalPFClusterIso()", float, precision=14, doc="ECAL PF-cluster isolation")
     v.hcalPFClusIso = Var("hcalPFClusterIso()", float, precision=14, doc="HCAL PF-cluster isolation")
+    # Photon side: the electron->photon match in the Hgg preselection compares SC (eta, phi)
+    # on BOTH objects, so the photon needs phi too (nano ships only superclusterEta here as well).
+    pho = getattr(process, "photonTable", None)
+    if pho is not None:
+        pho.variables.superclusterPhi = Var("superCluster().phi()", float, precision=14,
+                                            doc="supercluster phi")
+        pho.variables.superclusterEnergy = Var("superCluster().energy()", float, precision=14,
+                                               doc="supercluster energy (corrected; cf. energyRaw)")
     _addEgmScaleSmearVars(process)
     return process
 
