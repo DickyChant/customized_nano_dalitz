@@ -194,6 +194,94 @@ def customizeMergedElectron2018(process):
 # backend via the cfi 'backend' param: onnx (default, both releases) or xgboost (15_0).
 # Adds branches ALONGSIDE the ZprimeTo4l merged ID.
 # ---------------------------------------------------------------------------
+def _addMergedEleInputVars(process):
+    """Electron-table variables the merged-electron ID consumes that stock NanoAOD omits.
+
+    All are plain pat::Electron accessors, so they cost nothing but the branch. Stock nano
+    already ships rho, superclusterEta, rawEnergy, hoe, eInvMinusPInv, sieie, r9, fbrem and
+    energyErr; these are the remaining ID inputs, plus the split PF-isolation components
+    (nano only stores the combined pfRelIso03_all / _chg) and the PF-cluster isolations
+    (present for photons but not electrons). Names follow the CMSSW electron MVA-variable
+    conventions where one exists.
+    """
+    from PhysicsTools.NanoAOD.common_cff import Var
+    v = process.electronTable.variables
+    v.dEtaSCTrkAtVtx = Var("deltaEtaSuperClusterTrackAtVtx", float, precision=14,
+                           doc="dEta(SC seed, track) at vertex")
+    v.dPhiSCTrkAtVtx = Var("deltaPhiSuperClusterTrackAtVtx", float, precision=14,
+                           doc="dPhi(SC seed, track) at vertex")
+    v.scEtaWidth = Var("superCluster().etaWidth()", float, precision=14, doc="supercluster eta width")
+    v.scPhiWidth = Var("superCluster().phiWidth()", float, precision=14, doc="supercluster phi width")
+    v.sipip = Var("full5x5_sigmaIphiIphi()", float, precision=14, doc="full5x5 sigma_iphiiphi")
+    v.eSCOverP = Var("eSuperClusterOverP()", float, precision=14, doc="E(SC)/p at vertex")
+    v.eEleOverPout = Var("eEleClusterOverPout()", float, precision=14,
+                         doc="E(ele cluster)/p_out at the calorimeter")
+    v.gsfTrkChi2 = Var("gsfTrack().normalizedChi2()", float, precision=14,
+                       doc="normalized chi2 of the GSF track")
+    v.pfChIso = Var("pfIsolationVariables().sumChargedHadronPt", float, precision=14,
+                    doc="PF charged-hadron isolation (absolute, dR=0.3)")
+    v.pfPhoIso = Var("pfIsolationVariables().sumPhotonEt", float, precision=14,
+                     doc="PF photon isolation (absolute, dR=0.3)")
+    v.pfNeuIso = Var("pfIsolationVariables().sumNeutralHadronEt", float, precision=14,
+                     doc="PF neutral-hadron isolation (absolute, dR=0.3)")
+    v.pfPUIso = Var("pfIsolationVariables().sumPUPt", float, precision=14,
+                    doc="PF pileup isolation (absolute, dR=0.3)")
+    v.ecalPFClusIso = Var("ecalPFClusterIso()", float, precision=14, doc="ECAL PF-cluster isolation")
+    v.hcalPFClusIso = Var("hcalPFClusterIso()", float, precision=14, doc="HCAL PF-cluster isolation")
+    _addEgmScaleSmearVars(process)
+    return process
+
+
+# EGM energy scale & smearing. The UL MiniAODv2 slimmedElectrons/slimmedPhotons already carry
+# these as userFloats (the EGM post-reco ran in the MiniAOD step), so no extra sequence is
+# needed -- they only have to be written out.
+#
+# Two things to know before using them (both verified on UL18 signal MC):
+#  1. Every variation is an ENERGY in GeV, not a pT. To vary pT, scale by
+#     (variation / nominal), i.e.  pt_varied = pt * variation / <reference energy>.
+#  2. The *reference* differs by collection: for ELECTRONS the variations are of the combined
+#     ECAL+track energy `egmEnergyTrkPostCorr`, NOT the ECAL-only `egmEnergyPostCorr`
+#     (checked: the scale variations reproduce ecalTrkEnergyPostCorr exactly). For PHOTONS
+#     the reference is `egmEnergyPostCorr`.
+# In MC the scale up/down variations are identical to each other by EGM convention -- the
+# scale uncertainty is applied to data, while MC receives the resolution smearing instead.
+_EGM_SYST = {
+    "energyScaleStatUp":   ("egmScaleStatUp",   "energy scale, statistical  up   variation [GeV]"),
+    "energyScaleStatDown": ("egmScaleStatDn",   "energy scale, statistical  down variation [GeV]"),
+    "energyScaleSystUp":   ("egmScaleSystUp",   "energy scale, systematic   up   variation [GeV]"),
+    "energyScaleSystDown": ("egmScaleSystDn",   "energy scale, systematic   down variation [GeV]"),
+    "energyScaleGainUp":   ("egmScaleGainUp",   "energy scale, gain-switch  up   variation [GeV]"),
+    "energyScaleGainDown": ("egmScaleGainDn",   "energy scale, gain-switch  down variation [GeV]"),
+    "energySigmaRhoUp":    ("egmResolRhoUp",    "energy resolution, rho     up   variation [GeV]"),
+    "energySigmaRhoDown":  ("egmResolRhoDn",    "energy resolution, rho     down variation [GeV]"),
+    "energySigmaPhiUp":    ("egmResolPhiUp",    "energy resolution, phi     up   variation [GeV]"),
+    "energySigmaPhiDown":  ("egmResolPhiDn",    "energy resolution, phi     down variation [GeV]"),
+    "energyScaleValue":    ("egmScaleValue",    "nominal energy scale correction applied"),
+    "energySigmaValue":    ("egmResolValue",    "nominal energy resolution smearing applied"),
+    "ecalEnergyPostCorr":  ("egmEnergyPostCorr", "ECAL-only energy after EGM scale&smearing [GeV]; "
+                                                 "the reference for the PHOTON variations"),
+}
+
+
+def _addEgmScaleSmearVars(process):
+    from PhysicsTools.NanoAOD.common_cff import Var
+    for tbl, extra in ((getattr(process, "electronTable", None),
+                        {"ecalTrkEnergyPostCorr": ("egmEnergyTrkPostCorr",
+                                                   "combined ECAL+track energy after EGM correction [GeV]; "
+                                                   "the reference for the ELECTRON variations"),
+                         "ecalTrkEnergyErrPostCorr": ("egmEnergyTrkErrPostCorr",
+                                                      "error on the combined ECAL+track corrected energy [GeV]")}),
+                       (getattr(process, "photonTable", None), {})):
+        if tbl is None:
+            continue
+        for uf, (name, doc) in list(_EGM_SYST.items()) + list(extra.items()):
+            # guarded: an object without the userFloat gets the sentinel rather than an exception
+            setattr(tbl.variables, name,
+                    Var("?hasUserFloat('%s')?userFloat('%s'):-999." % (uf, uf), float,
+                        precision=14, doc=doc))
+    return process
+
+
 def customizeHDalitzMergedElectron(process):
     from PhysicsTools.NanoAOD.common_cff import ExtVar
     from HDalitzEle.MergedID.hdalitzMergedID_cfi import hdalitzMergedID
@@ -209,6 +297,50 @@ def customizeHDalitzMergedElectron(process):
                                       doc="HDalitzEle merged-ID category: 0 M1EB, 1 M1EE, 2 M2EB, 3 M2EE")
     ev.hdalitzMergedWPTight = ExtVar(cms.InputTag("hdalitzMergedID", "hdalitzMergedWPTight"), "int",
                                      doc="HDalitzEle merged-ID passes tight WP")
+
+    # --- the two GSF tracks of the merged electron -------------------------------
+    # The H->ee gamma analysis rebuilds the merged candidate from both tracks: its mass is
+    # the di-track invariant mass, and the track d0/dz/charge/hits drive the PV, opposite-sign
+    # and non-conversion cuts plus the per-track scale factors. Publishing them keyed to the
+    # electron removes the fragile "match tracks to electrons by exact float equality" step.
+    _gsfF = {  # ValueMap<float> label -> (branch name, doc)
+        "hdalitzMainGsfPt":     ("gsfMainTrkPt",     "pt of the electron's own GSF track"),
+        "hdalitzMainGsfEta":    ("gsfMainTrkEta",    "eta of the electron's own GSF track"),
+        "hdalitzMainGsfPhi":    ("gsfMainTrkPhi",    "phi of the electron's own GSF track"),
+        "hdalitzMainGsfD0":     ("gsfMainTrkD0",     "dxy(PV) of the electron's own GSF track"),
+        "hdalitzMainGsfDz":     ("gsfMainTrkDz",     "dz(PV) of the electron's own GSF track"),
+        "hdalitzAddGsfPt":      ("gsfAddTrkPt",      "pt of the additional (second) GSF track"),
+        "hdalitzAddGsfEta":     ("gsfAddTrkEta",     "eta of the additional (second) GSF track"),
+        "hdalitzAddGsfPhi":     ("gsfAddTrkPhi",     "phi of the additional (second) GSF track"),
+        "hdalitzAddGsfD0":      ("gsfAddTrkD0",      "dxy(PV) of the additional GSF track"),
+        "hdalitzAddGsfDz":      ("gsfAddTrkDz",      "dz(PV) of the additional GSF track"),
+        "hdalitzGsfPtRatio":    ("gsfPtRatio",       "pt(add GSF)/pt(main GSF)"),
+        "hdalitzGsfDeltaR":     ("gsfDeltaR",        "dR between the two GSF tracks"),
+        "hdalitzGsfRelPtRatio": ("gsfRelPtRatio",    "pt(sum of GSF tracks)/SC raw energy"),
+        "hdalitzGsfPtSum":      ("gsfPtSum",         "pt(main GSF) + pt(add GSF)"),
+        "hdalitzDiTrkPt":       ("gsfDiTrkPt",       "pt of the two-GSF-track system"),
+        "hdalitzDiTrkMass":     ("gsfDiTrkMass",     "invariant mass of the two GSF tracks "
+                                                     "(the merged-electron mass used downstream)"),
+    }
+    _gsfI = {
+        "hdalitzMainGsfCharge":    ("gsfMainTrkCharge",    "charge of the electron's own GSF track"),
+        "hdalitzMainGsfMissHits":  ("gsfMainTrkMissHits",  "missing inner hits, own GSF track"),
+        "hdalitzMainGsfLostHits":  ("gsfMainTrkLostHits",  "lost inner hits, own GSF track"),
+        "hdalitzMainGsfPixelHits": ("gsfMainTrkPixelHits", "valid pixel hits, own GSF track"),
+        "hdalitzMainGsfLayers":    ("gsfMainTrkLayers",    "tracker layers with measurement, own GSF track"),
+        "hdalitzAddGsfCharge":     ("gsfAddTrkCharge",     "charge of the additional GSF track"),
+        "hdalitzAddGsfMissHits":   ("gsfAddTrkMissHits",   "missing inner hits, additional GSF track"),
+        "hdalitzAddGsfLostHits":   ("gsfAddTrkLostHits",   "lost inner hits, additional GSF track"),
+        "hdalitzAddGsfPixelHits":  ("gsfAddTrkPixelHits",  "valid pixel hits, additional GSF track"),
+        "hdalitzAddGsfLayers":     ("gsfAddTrkLayers",     "tracker layers with measurement, additional GSF track"),
+        "hdalitzHasAddGsf":        ("gsfHasAddTrk",        "an additional (second) GSF track was found"),
+    }
+    for label, (name, doc) in _gsfF.items():
+        setattr(ev, name, ExtVar(cms.InputTag("hdalitzMergedID", label), float, doc=doc, precision=14))
+    for label, (name, doc) in _gsfI.items():
+        setattr(ev, name, ExtVar(cms.InputTag("hdalitzMergedID", label), "int", doc=doc))
+
+    _addMergedEleInputVars(process)
 
     task = cms.Task(process.hdalitzMergedID)
     process.hdalitzMergedIDTask = task

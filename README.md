@@ -46,6 +46,28 @@ For Run3, use `--era Run3` and a Run3 GlobalTag (15_0 branch). The producers are
 the shipped HDalitz models are Run2-UL-trained, so Run3 scores run but are not Run3-calibrated
 (retrain → `save_model` → `scripts/hdalitz_convert_onnx.py` → drop-in the new `.onnx`).
 
+## Analysis content beyond the ID score
+The merged-electron **score** alone is not enough to run the H→γ*γ→eeγ analysis: it rebuilds the
+merged candidate from **both GSF tracks** (its mass is the di-track invariant mass, and the track
+d0/dz/charge/hits drive the PV / opposite-sign / non-conversion cuts and the per-track SFs). The
+`customizeHDalitzMergedElectron` customise therefore also writes, keyed to the electron:
+
+| group | branches |
+|---|---|
+| GSF tracks | `Electron_gsfMainTrk{Pt,Eta,Phi,D0,Dz,Charge,MissHits,LostHits,PixelHits,Layers}`, the same set as `gsfAddTrk*`, plus `gsfHasAddTrk` |
+| GSF derived | `gsfPtRatio`, `gsfDeltaR`, `gsfRelPtRatio`, `gsfPtSum`, `gsfDiTrkPt`, **`gsfDiTrkMass`** (the merged-electron mass) |
+| ID inputs | `dEtaSCTrkAtVtx`, `dPhiSCTrkAtVtx`, `scEtaWidth`, `scPhiWidth`, `sipip`, `eSCOverP`, `eEleOverPout`, `gsfTrkChi2` |
+| isolation | `pfChIso`, `pfPhoIso`, `pfNeuIso`, `pfPUIso`, `ecalPFClusIso`, `hcalPFClusIso` (nano ships only the combined `pfRelIso03_*`) |
+| EGM scale/smear | `{Electron,Photon}_egm{ScaleStat,ScaleSyst,ScaleGain,ResolRho,ResolPhi}{Up,Dn}` + nominals |
+
+Publishing the tracks keyed to the electron removes the upstream ggNtuple step that re-associates
+tracks to electrons by **exact float equality** on `(d0, dz)`.
+
+**Using the EGM variations** — they are *energies in GeV*, not pT, and the reference differs by
+collection: electrons vary `egmEnergyTrkPostCorr` (combined ECAL+track), photons vary
+`egmEnergyPostCorr` (ECAL-only). In MC the scale up/down are identical by EGM convention (the
+scale uncertainty applies to data; MC gets the resolution smearing).
+
 ## Production at FNAL LPC (cmslpc)
 Grid production is driven from `crab/` and is set up for **cmslpc**, native el9 — no container
 needed for the 15_0 branch. Full instructions and tuning notes: **[`crab/README.md`](crab/README.md)**.

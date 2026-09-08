@@ -89,6 +89,22 @@ HDalitzMergedIDProducer::HDalitzMergedIDProducer(const edm::ParameterSet& cfg)
   produces<edm::ValueMap<int>>("hdalitzMergedNGsf");
   produces<edm::ValueMap<int>>("hdalitzMergedCategory");   // 0 M1EB, 1 M1EE, 2 M2EB, 3 M2EE
   produces<edm::ValueMap<int>>("hdalitzMergedWPTight");
+
+  // --- main (the electron's own) and additional/sub GSF track ---
+  // The downstream H->ee gamma analysis rebuilds the merged electron from BOTH GSF tracks:
+  // its mass is the di-track invariant mass, and the track-level d0/dz/charge/hit quantities
+  // drive the PV / opposite-sign / non-conversion cuts and the per-track scale factors.
+  // Publishing them here removes the need to re-associate tracks to electrons downstream.
+  for (const char* l : {"MainGsfPt", "MainGsfEta", "MainGsfPhi", "MainGsfD0", "MainGsfDz",
+                        "AddGsfPt", "AddGsfEta", "AddGsfPhi", "AddGsfD0", "AddGsfDz",
+                        "GsfPtRatio", "GsfDeltaR", "GsfRelPtRatio", "GsfPtSum",
+                        "DiTrkPt", "DiTrkMass"})
+    produces<edm::ValueMap<float>>(std::string("hdalitz") + l);
+  for (const char* l : {"MainGsfCharge", "MainGsfMissHits", "MainGsfLostHits",
+                        "MainGsfPixelHits", "MainGsfLayers",
+                        "AddGsfCharge", "AddGsfMissHits", "AddGsfLostHits",
+                        "AddGsfPixelHits", "AddGsfLayers", "HasAddGsf"})
+    produces<edm::ValueMap<int>>(std::string("hdalitz") + l);
 }
 
 std::unique_ptr<HDalitzMergedEstimatorBase> HDalitzMergedIDProducer::makeEstimator(
@@ -117,13 +133,23 @@ void HDalitzMergedIDProducer::produce(edm::Event& iEvent, const edm::EventSetup&
   std::vector<float> outScore(nEle, kSentinel);
   std::vector<int> outNGsf(nEle, 0), outCat(nEle, -1), outWP(nEle, 0);
 
+  // main/additional GSF track quantities (kSentinel / -1 when the track does not exist)
+  std::vector<float> oMPt(nEle, kSentinel), oMEta(nEle, kSentinel), oMPhi(nEle, kSentinel),
+      oMD0(nEle, kSentinel), oMDz(nEle, kSentinel), oAPt(nEle, kSentinel), oAEta(nEle, kSentinel),
+      oAPhi(nEle, kSentinel), oAD0(nEle, kSentinel), oADz(nEle, kSentinel),
+      oPtRatio(nEle, kSentinel), oDeltaR(nEle, kSentinel), oRelPtRatio(nEle, kSentinel),
+      oPtSum(nEle, kSentinel), oDiTrkPt(nEle, kSentinel), oDiTrkMass(nEle, kSentinel);
+  std::vector<int> oMCharge(nEle, 0), oMMiss(nEle, -1), oMLost(nEle, -1), oMPix(nEle, -1),
+      oMLayers(nEle, -1), oACharge(nEle, 0), oAMiss(nEle, -1), oALost(nEle, -1), oAPix(nEle, -1),
+      oALayers(nEle, -1), oHasAdd(nEle, 0);
+
   // primary vertex (fall back to origin if none) -- used for track d0/dz, matching ggNtuplizer
   const reco::Vertex::Point pv = vtxs.empty() ? reco::Vertex::Point(0, 0, 0) : vtxs.front().position();
 
   // per-GSF-track quantities (over reducedGsfTracks), same accessors as ggNtuplizer
   const size_t nGsf = gsfHandle->size();
   std::vector<float> gD0(nGsf), gDz(nGsf), gEta(nGsf), gPhi(nGsf), gPt(nGsf);
-  std::vector<int> gCharge(nGsf), gMiss(nGsf);
+  std::vector<int> gCharge(nGsf), gMiss(nGsf), gLost(nGsf), gPix(nGsf), gLayers(nGsf);
   for (size_t j = 0; j < nGsf; ++j) {
     const auto& g = (*gsfHandle)[j];
     gD0[j] = g.dxy(pv);
@@ -133,6 +159,9 @@ void HDalitzMergedIDProducer::produce(edm::Event& iEvent, const edm::EventSetup&
     gPt[j] = g.pt();
     gCharge[j] = g.charge();
     gMiss[j] = g.hitPattern().numberOfAllHits(reco::HitPattern::MISSING_INNER_HITS);
+    gLost[j] = g.hitPattern().numberOfLostHits(reco::HitPattern::MISSING_INNER_HITS);
+    gPix[j] = g.hitPattern().numberOfValidPixelHits();
+    gLayers[j] = g.hitPattern().trackerLayersWithMeasurement();
   }
 
   // main GSF index for each electron (the electron's own GSF track inside reducedGsfTracks)
@@ -206,6 +235,27 @@ void HDalitzMergedIDProducer::produce(edm::Event& iEvent, const edm::EventSetup&
       gsfRelPtRatio = (trk1 + trk2).pt() / scRawEn;
     }
 
+    // --- publish the track-level quantities the downstream analysis rebuilds the candidate from ---
+    oMPt[i] = gPt[m];  oMEta[i] = gEta[m];  oMPhi[i] = gPhi[m];
+    oMD0[i] = gD0[m];  oMDz[i] = gDz[m];    oMCharge[i] = gCharge[m];
+    oMMiss[i] = gMiss[m];  oMLost[i] = gLost[m];
+    oMPix[i] = gPix[m];    oMLayers[i] = gLayers[m];
+    oHasAdd[i] = hasSub ? 1 : 0;
+    oRelPtRatio[i] = gsfRelPtRatio;
+    if (hasSub) {
+      const math::PtEtaPhiMLorentzVector t1(gPt[m], gEta[m], gPhi[m], kEleMass);
+      const math::PtEtaPhiMLorentzVector t2(gPt[subIdx], gEta[subIdx], gPhi[subIdx], kEleMass);
+      oAPt[i] = gPt[subIdx];  oAEta[i] = gEta[subIdx];  oAPhi[i] = gPhi[subIdx];
+      oAD0[i] = gD0[subIdx];  oADz[i] = gDz[subIdx];    oACharge[i] = gCharge[subIdx];
+      oAMiss[i] = gMiss[subIdx];  oALost[i] = gLost[subIdx];
+      oAPix[i] = gPix[subIdx];    oALayers[i] = gLayers[subIdx];
+      oPtRatio[i] = gsfPtRatio;
+      oDeltaR[i] = gsfDeltaR;
+      oPtSum[i] = gPt[m] + gPt[subIdx];
+      oDiTrkPt[i] = (t1 + t2).pt();
+      oDiTrkMass[i] = (t1 + t2).M();  // <- the merged-electron mass used downstream
+    }
+
     // standard electron features (exactly as ggNtuplizer computes them)
     float elePtError = ele.hasUserFloat("ecalTrkEnergyErrPostCorr")
                            ? ele.userFloat("ecalTrkEnergyErrPostCorr") * ele.pt() / ele.p()
@@ -260,6 +310,35 @@ void HDalitzMergedIDProducer::produce(edm::Event& iEvent, const edm::EventSetup&
   writeValueMap(iEvent, eleHandle, outNGsf, "hdalitzMergedNGsf");
   writeValueMap(iEvent, eleHandle, outCat, "hdalitzMergedCategory");
   writeValueMap(iEvent, eleHandle, outWP, "hdalitzMergedWPTight");
+
+  writeValueMap(iEvent, eleHandle, oMPt, "hdalitzMainGsfPt");
+  writeValueMap(iEvent, eleHandle, oMEta, "hdalitzMainGsfEta");
+  writeValueMap(iEvent, eleHandle, oMPhi, "hdalitzMainGsfPhi");
+  writeValueMap(iEvent, eleHandle, oMD0, "hdalitzMainGsfD0");
+  writeValueMap(iEvent, eleHandle, oMDz, "hdalitzMainGsfDz");
+  writeValueMap(iEvent, eleHandle, oAPt, "hdalitzAddGsfPt");
+  writeValueMap(iEvent, eleHandle, oAEta, "hdalitzAddGsfEta");
+  writeValueMap(iEvent, eleHandle, oAPhi, "hdalitzAddGsfPhi");
+  writeValueMap(iEvent, eleHandle, oAD0, "hdalitzAddGsfD0");
+  writeValueMap(iEvent, eleHandle, oADz, "hdalitzAddGsfDz");
+  writeValueMap(iEvent, eleHandle, oPtRatio, "hdalitzGsfPtRatio");
+  writeValueMap(iEvent, eleHandle, oDeltaR, "hdalitzGsfDeltaR");
+  writeValueMap(iEvent, eleHandle, oRelPtRatio, "hdalitzGsfRelPtRatio");
+  writeValueMap(iEvent, eleHandle, oPtSum, "hdalitzGsfPtSum");
+  writeValueMap(iEvent, eleHandle, oDiTrkPt, "hdalitzDiTrkPt");
+  writeValueMap(iEvent, eleHandle, oDiTrkMass, "hdalitzDiTrkMass");
+
+  writeValueMap(iEvent, eleHandle, oMCharge, "hdalitzMainGsfCharge");
+  writeValueMap(iEvent, eleHandle, oMMiss, "hdalitzMainGsfMissHits");
+  writeValueMap(iEvent, eleHandle, oMLost, "hdalitzMainGsfLostHits");
+  writeValueMap(iEvent, eleHandle, oMPix, "hdalitzMainGsfPixelHits");
+  writeValueMap(iEvent, eleHandle, oMLayers, "hdalitzMainGsfLayers");
+  writeValueMap(iEvent, eleHandle, oACharge, "hdalitzAddGsfCharge");
+  writeValueMap(iEvent, eleHandle, oAMiss, "hdalitzAddGsfMissHits");
+  writeValueMap(iEvent, eleHandle, oALost, "hdalitzAddGsfLostHits");
+  writeValueMap(iEvent, eleHandle, oAPix, "hdalitzAddGsfPixelHits");
+  writeValueMap(iEvent, eleHandle, oALayers, "hdalitzAddGsfLayers");
+  writeValueMap(iEvent, eleHandle, oHasAdd, "hdalitzHasAddGsf");
 }
 
 template <typename T>
