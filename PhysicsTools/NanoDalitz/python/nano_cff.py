@@ -217,6 +217,13 @@ def _addMergedEleInputVars(process):
                             doc="supercluster phi")
     v.superclusterEnergy = Var("superCluster().energy()", float, precision=14,
                                doc="supercluster energy (corrected; cf. rawEnergy)")
+    # preshower plane energies -- nano ships only the total (PreshowerEnergy). The EE energy
+    # regression uses (ESEnP1+ESEnP2)/SCRawEn, which the total already gives, but the planes
+    # are what ggNtuple stores so keep them separable.
+    v.esEnergyPlane1 = Var("superCluster().preshowerEnergyPlane1()", float, precision=14,
+                           doc="preshower energy, plane 1")
+    v.esEnergyPlane2 = Var("superCluster().preshowerEnergyPlane2()", float, precision=14,
+                           doc="preshower energy, plane 2")
     v.scEtaWidth = Var("superCluster().etaWidth()", float, precision=14, doc="supercluster eta width")
     v.scPhiWidth = Var("superCluster().phiWidth()", float, precision=14, doc="supercluster phi width")
     v.sipip = Var("full5x5_sigmaIphiIphi()", float, precision=14, doc="full5x5 sigma_iphiiphi")
@@ -243,6 +250,15 @@ def _addMergedEleInputVars(process):
                                             doc="supercluster phi")
         pho.variables.superclusterEnergy = Var("superCluster().energy()", float, precision=14,
                                                doc="supercluster energy (corrected; cf. energyRaw)")
+        # nano exposes the charged and photon components (pfChargedIso, pfPhoIso03) but not the
+        # neutral-hadron one; the Hgg preselection uses all three separately.
+        pho.variables.pfNeuIso = Var("neutralHadronIso()", float, precision=14,
+                                     doc="PF absolute isolation dR=0.3, neutral-hadron component (uncorrected)")
+        # preshower plane energies -- nano ships only the ES/raw ratio (esEnergyOverRawE)
+        pho.variables.esEnergyPlane1 = Var("superCluster().preshowerEnergyPlane1()", float,
+                                           precision=14, doc="preshower energy, plane 1")
+        pho.variables.esEnergyPlane2 = Var("superCluster().preshowerEnergyPlane2()", float,
+                                           precision=14, doc="preshower energy, plane 2")
     _addEgmScaleSmearVars(process)
     return process
 
