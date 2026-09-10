@@ -71,9 +71,45 @@ def customizeMergedElectron(process, year="2018"):
         cms.InputTag("mergedLeptonIDProducer", "mvaMergedElectronCategories"), int,
         doc="merged-electron MVA category: -1 Null, 0 HasTrk, 1 NoTrkEt2")
 
-    # --- schedule the two producers (unscheduled Task; ExtVar wiring fixes ordering) ---
+    # --- PF-based additional leg -------------------------------------------------
+    # A merged electron's second leg is either a 2nd GSF track or a packed PF candidate, and
+    # ~85% of electrons have NO 2nd GSF track -- so for most of them this is the only handle
+    # on the second leg. It also carries lostInnerHits(), the conversion discriminator that
+    # actually works in MiniAOD (a ref-based per-GSF-track conversion veto is impossible:
+    # MiniAOD conversions are built from general tracks whose Refs are dropped).
+    process.mergedEleAddPackedCand = cms.EDProducer(
+        "MergedEleAddPackedCandTableProducer",
+        srcEle=_ELE_SRC,
+        addPackedCandMap=cms.InputTag("mergedHEEPIDVarValueMaps", "eleAddPackedCand"),
+    )
+    _pc = {
+        "addPackedCandPt":  ("pfAddCandPt",  float, "pt of the PF candidate forming the 2nd leg"),
+        "addPackedCandEta": ("pfAddCandEta", float, "eta of the PF 2nd leg"),
+        "addPackedCandPhi": ("pfAddCandPhi", float, "phi of the PF 2nd leg"),
+        "addPackedCandDxy": ("pfAddCandDxy", float, "dxy of the PF 2nd leg"),
+        "addPackedCandDz":  ("pfAddCandDz",  float, "dz of the PF 2nd leg"),
+        "addPackedCandCharge":        ("pfAddCandCharge", "int", "charge of the PF 2nd leg"),
+        "addPackedCandLostInnerHits": ("pfAddCandLostInnerHits", "int",
+                                       "lost inner hits of the PF 2nd leg: -1 valid hit in first "
+                                       "pixel layer (least conversion-like), 0 none, 1 one, 2 more "
+                                       "-- the MiniAOD conversion discriminator for this leg"),
+        "addPackedCandPixelHits":  ("pfAddCandPixelHits", "int", "pixel hits of the PF 2nd leg"),
+        "addPackedCandNHits":      ("pfAddCandNHits", "int", "tracker hits of the PF 2nd leg"),
+        "addPackedCandHighPurity": ("pfAddCandHighPurity", "int", "PF 2nd leg track is high purity"),
+        "addPackedCandExists":     ("pfHasAddCand", "int", "a PF candidate 2nd leg was found"),
+    }
+    for label, spec in _pc.items():
+        name, typ, doc = spec
+        kw = dict(doc=doc)
+        if typ is float:
+            kw["precision"] = 14
+        process.electronTable.externalVariables.__setattr__(
+            name, ExtVar(cms.InputTag("mergedEleAddPackedCand", label), typ, **kw))
+
+    # --- schedule the producers (unscheduled Task; ExtVar wiring fixes ordering) ---
     process.mergedElectronIDTask = cms.Task(process.mergedHEEPIDVarValueMaps,
-                                            process.mergedLeptonIDProducer)
+                                            process.mergedLeptonIDProducer,
+                                            process.mergedEleAddPackedCand)
     if hasattr(process, "schedule") and process.schedule is not None:
         process.schedule.associate(process.mergedElectronIDTask)
     else:
