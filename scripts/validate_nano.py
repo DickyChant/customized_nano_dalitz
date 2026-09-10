@@ -45,6 +45,15 @@ REQUIRED = {
         "Electron_scPhiWidth", "Electron_sipip", "Electron_eSCOverP",
         "Electron_eEleOverPout", "Electron_gsfTrkChi2",
     ],
+    # supercluster phi is the 4th energy-regression feature AND is what the Hgg
+    # preselection matches electron<->photon on, so it is required on both collections
+    "supercluster": [
+        "Electron_superclusterEta", "Electron_superclusterPhi", "Electron_superclusterEnergy",
+        "Electron_rawEnergy", "Electron_PreshowerEnergy",
+        "Electron_esEnergyPlane1", "Electron_esEnergyPlane2",
+        "Photon_superclusterEta", "Photon_superclusterPhi", "Photon_superclusterEnergy",
+        "Photon_esEnergyPlane1", "Photon_esEnergyPlane2",
+    ],
     "isolation": [
         "Electron_pfChIso", "Electron_pfPhoIso", "Electron_pfNeuIso", "Electron_pfPUIso",
         "Electron_ecalPFClusIso", "Electron_hcalPFClusIso",
@@ -62,6 +71,19 @@ REQUIRED = {
     ],
     "slim (must be ABSENT)": [],   # handled separately
 }
+# The merged-electron ENERGY REGRESSION input set (HDalitzEle MergedAnalysis.cpp:524-548).
+# The regression itself runs downstream, so the file is only useful if every input is here.
+REGRESSION_INPUTS = [
+    "Rho_fixedGridRhoFastjetAll", "PV_npvs",
+    "Electron_superclusterEta", "Electron_superclusterPhi", "Electron_rawEnergy", "Electron_pt",
+    "Electron_dEtaSCTrkAtVtx", "Electron_dPhiSCTrkAtVtx", "Electron_energyErr", "Electron_hoe",
+    "Electron_eSCOverP", "Electron_eEleOverPout", "Electron_eInvMinusPInv",
+    "Electron_scEtaWidth", "Electron_scPhiWidth", "Electron_sieie", "Electron_sipip",
+    "Electron_r9", "Electron_fbrem",
+    "Electron_gsfPtSum", "Electron_gsfPtRatio", "Electron_gsfDiTrkPt", "Electron_gsfDeltaR",
+    "Electron_PreshowerEnergy",   # EE-only eleESEnToRawE = PreshowerEnergy / rawEnergy
+]
+
 # --slim drops these; their presence means the customise did not run as intended
 MUST_BE_ABSENT = ["boostedTau_pt", "LowPtElectron_pt", "FatJet_pt", "SubJet_pt", "IsoTrack_pt"]
 
@@ -109,11 +131,34 @@ def validate(path, quiet=False):
         r.check(not missing, "%-18s %d/%d present%s"
                 % (group, len(blist) - len(missing), len(blist),
                    ("  MISSING: " + ", ".join(missing[:6])) if missing else ""))
+    miss_reg = [b for b in REGRESSION_INPUTS if b not in names]
+    r.check(not miss_reg, "energy-regression inputs %d/%d present%s"
+            % (len(REGRESSION_INPUTS) - len(miss_reg), len(REGRESSION_INPUTS),
+               ("  MISSING: " + ", ".join(miss_reg)) if miss_reg else ""))
+
     present_bad = [b for b in MUST_BE_ABSENT if b in names]
     r.check(not present_bad, "slim applied (dropped tables absent)%s"
             % ("  UNEXPECTEDLY PRESENT: " + ", ".join(present_bad) if present_bad else ""))
 
     # --- physics sanity on the merged-electron block -----------------------
+    # Guard every branch this block touches: a missing one must FAIL cleanly, not traceback.
+    need = ["nElectron", "Electron_gsfHasAddTrk", "Electron_gsfMainTrkCharge",
+            "Electron_gsfAddTrkCharge", "Electron_gsfAddTrkMissHits", "Electron_gsfDiTrkMass",
+            "Electron_gsfDeltaR", "Electron_gsfPtSum", "Electron_gsfMainTrkPt",
+            "Electron_gsfAddTrkPt"]
+    absent = [b for b in need if b not in names]
+    if absent:
+        r.check(False, "cannot run physics checks, branches absent: %s" % ", ".join(absent))
+        f.Close()
+        for m in r.ok:
+            say("  ok    %s" % m)
+        for m in r.warn:
+            say("  WARN  %s" % m)
+        for m in r.fail:
+            say("  FAIL  %s" % m)
+        say("  => FAIL")
+        return False
+
     nele = nadd = opp = badmiss = 0
     masses, drs, ptsum_bad = [], [], 0
     for i in range(n):
