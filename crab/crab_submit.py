@@ -48,6 +48,10 @@ GOLDEN_JSONS = {
     "2016": os.path.join(CRABDIR, "jsons", "Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.txt"),
     "2017": os.path.join(CRABDIR, "jsons", "Cert_294927-306462_13TeV_UL2017_Collisions17_GoldenJSON.txt"),
     "2018": os.path.join(CRABDIR, "jsons", "Cert_314472-325175_13TeV_Legacy2018_Collisions18_JSON.txt"),
+    "2022": os.path.join(CRABDIR, "jsons", "Cert_Collisions2022_355100_362760_Golden.json"),
+    "2023": os.path.join(CRABDIR, "jsons", "Cert_Collisions2023_366442_370790_Golden.json"),
+    "2024": os.path.join(CRABDIR, "jsons", "Cert_Collisions2024_378981_386951_Golden.json"),
+    "2025": os.path.join(CRABDIR, "jsons", "Cert_Collisions2025_391658_398903_Golden.json"),
 }
 
 
@@ -55,12 +59,16 @@ def golden_json(s):
     override = os.environ.get("CND_GOLDEN_JSON")
     if override:
         return override
+    # Run2 entries carry the year in the era (e.g. "Run2_2018"); Run3 entries just say "Run3",
+    # and a single Run3 era spans 2022 and 2023 which need DIFFERENT golden JSONs -- so fall
+    # back to the era/run period encoded in the dataset name ("/EGamma/Run2022C-...").
     for year, path in GOLDEN_JSONS.items():
-        if year in s["era"]:
+        if year in s["era"] or ("Run" + year) in s["dataset"]:
             if not os.path.exists(path):
                 sys.exit("golden JSON missing: %s (run jsons/fetch.sh)" % path)
             return path
-    sys.exit("no golden JSON for era %r (set CND_GOLDEN_JSON)" % s["era"])
+    sys.exit("no golden JSON for era %r dataset %r (set CND_GOLDEN_JSON)"
+             % (s["era"], s["dataset"]))
 
 
 SLIM_CUSTOMISE = "PhysicsTools/NanoDalitz/nano_cff.slimNanoDalitz"

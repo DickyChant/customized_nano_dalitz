@@ -22,8 +22,7 @@ ROOT.gErrorIgnoreLevel = ROOT.kError
 
 # Branches the H->ee gamma analysis needs. Grouped so a failure says *what* is missing.
 REQUIRED = {
-    "merged ID": [
-        "Electron_mvaMergedElectron", "Electron_mvaMergedElectronCategory",
+    "merged ID (HDalitz)": [
         "Electron_mvaHDalitzMergedID", "Electron_hdalitzMergedCategory",
         "Electron_hdalitzMergedNGsf", "Electron_hdalitzMergedWPTight",
     ],
@@ -84,6 +83,10 @@ REGRESSION_INPUTS = [
     "Electron_PreshowerEnergy",   # EE-only eleESEnToRawE = PreshowerEnergy / rawEnergy
 ]
 
+# The ZprimeTo4l merged ID is Run2-ONLY: its GBRForest models are UL-trained, so the Run3
+# customise (customizeHDalitzMergedElectron) deliberately omits it. Absent => WARN, not FAIL.
+RUN2_ONLY = ["Electron_mvaMergedElectron", "Electron_mvaMergedElectronCategory"]
+
 # --slim drops these; their presence means the customise did not run as intended
 MUST_BE_ABSENT = ["boostedTau_pt", "LowPtElectron_pt", "FatJet_pt", "SubJet_pt", "IsoTrack_pt"]
 
@@ -135,6 +138,13 @@ def validate(path, quiet=False):
     r.check(not miss_reg, "energy-regression inputs %d/%d present%s"
             % (len(REGRESSION_INPUTS) - len(miss_reg), len(REGRESSION_INPUTS),
                ("  MISSING: " + ", ".join(miss_reg)) if miss_reg else ""))
+
+    miss_r2 = [b for b in RUN2_ONLY if b not in names]
+    r.check(not miss_r2,
+            "ZprimeTo4l merged ID %d/%d present%s"
+            % (len(RUN2_ONLY) - len(miss_r2), len(RUN2_ONLY),
+               "  (absent -> Run3 config, expected)" if miss_r2 else ""),
+            warn_only=True)
 
     present_bad = [b for b in MUST_BE_ABSENT if b in names]
     r.check(not present_bad, "slim applied (dropped tables absent)%s"
@@ -195,6 +205,21 @@ def validate(path, quiet=False):
                 warn_only=True)
         say("  di-track mass: min=%.4f med=%.4f max=%.4f GeV | dR med=%.5f"
             % (mmin, med, mmax, sorted(drs)[len(drs) // 2]))
+
+    # --- EGM: are the variations actually FILLED? Run3 MiniAODv4 ships no EGM userFloats,
+    # so the branches exist but hold the -999 sentinel. Presence alone would be misleading. --
+    if "Electron_egmScaleStatUp" in names and nele:
+        filled = 0
+        for i in range(min(n, 200)):
+            t.GetEntry(i)
+            for j in range(int(t.nElectron)):
+                if t.Electron_egmScaleStatUp[j] > -900:
+                    filled += 1
+        r.check(filled > 0,
+                "EGM scale/smear filled (%d sampled electrons)%s"
+                % (filled, "" if filled else
+                   "  -- all sentinel: no EGM userFloats in this MiniAOD (expected for Run3)"),
+                warn_only=True)
 
     # --- EGM reference consistency (electrons vary the ECAL+track energy) --
     if "Electron_egmScaleStatUp" in names and nele:
