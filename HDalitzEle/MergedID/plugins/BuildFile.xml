@@ -6,6 +6,10 @@
 <use name="DataFormats/PatCandidates"/>
 <use name="DataFormats/GsfTrackReco"/>
 <use name="DataFormats/VertexReco"/>
+<use name="TrackingTools/TransientTrack"/>
+<use name="TrackingTools/Records"/>
+<use name="RecoVertex/KalmanVertexFit"/>
+<use name="RecoVertex/VertexPrimitives"/>
 <use name="DataFormats/Math"/>
 <use name="HDalitzEle/MergedID"/>
 <use name="xgboost"/>

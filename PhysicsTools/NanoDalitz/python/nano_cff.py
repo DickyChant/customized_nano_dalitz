@@ -71,6 +71,34 @@ def customizeMergedElectron(process, year="2018"):
         cms.InputTag("mergedLeptonIDProducer", "mvaMergedElectronCategories"), int,
         doc="merged-electron MVA category: -1 Null, 0 HasTrk, 1 NoTrkEt2")
 
+    # --- ZprimeTo4l merged-ID input variables ------------------------------------
+    # The 11 ModifiedHEEP ValueMaps the ZprimeTo4l GBRForest actually consumes, plus the two
+    # track isolations. Publishing them makes that ID retrainable from nano without
+    # reproducing the sample -- the same rationale as the 22 HDalitz features.
+    #   alphaTrack/alphaCalo      : the "alpha" angular variables of the merged pair
+    #   dEtaInSeed2nd/dPhiInSC2nd : dEta/dPhi recomputed w.r.t. the SECOND GSF track
+    #   union5x5dEtaIn/dPhiIn     : the same, from the union-5x5 (merged) cluster
+    #   union5x5cov*              : shower-shape covariances of the union cluster
+    _zp = {
+        "dPerpIn":           ("modDPerpIn",        "dPerpIn (ModifiedHEEP)"),
+        "dEtaInSeed2nd":     ("modDEtaInSeed2nd",  "dEtaInSeed recomputed w.r.t. the 2nd GSF track"),
+        "dPhiInSC2nd":       ("modDPhiInSC2nd",    "dPhiInSC recomputed w.r.t. the 2nd GSF track"),
+        "alphaTrack":        ("modAlphaTrack",     "alpha (track-based) of the merged electron"),
+        "alphaCalo":         ("modAlphaCalo",      "alpha (calo-based) of the merged electron"),
+        "normalizedDParaIn": ("modNormDParaIn",    "normalized dParaIn (ModifiedHEEP)"),
+        "union5x5covIeIe":   ("modUnion5x5covIeIe", "union-5x5 cluster cov(ieta,ieta)"),
+        "union5x5covIeIp":   ("modUnion5x5covIeIp", "union-5x5 cluster cov(ieta,iphi)"),
+        "union5x5covIpIp":   ("modUnion5x5covIpIp", "union-5x5 cluster cov(iphi,iphi)"),
+        "union5x5dEtaIn":    ("modUnion5x5dEtaIn",  "dEtaIn from the union-5x5 (merged) cluster"),
+        "union5x5dPhiIn":    ("modUnion5x5dPhiIn",  "dPhiIn from the union-5x5 (merged) cluster"),
+        "union5x5Energy":    ("modUnion5x5Energy",  "energy of the union-5x5 (merged) cluster"),
+        "eleTrkPtIso":       ("modTrkPtIso",        "modified tracker isolation, dR=0.3"),
+    }
+    for label, (name, doc) in _zp.items():
+        setattr(process.electronTable.externalVariables, name,
+                ExtVar(cms.InputTag("mergedHEEPIDVarValueMaps", label), float,
+                       doc=doc, precision=14))
+
     # --- PF-based additional leg -------------------------------------------------
     # A merged electron's second leg is either a 2nd GSF track or a packed PF candidate, and
     # ~85% of electrons have NO 2nd GSF track -- so for most of them this is the only handle
@@ -388,6 +416,21 @@ def customizeHDalitzMergedElectron(process):
         "hdalitzDiTrkPt":       ("gsfDiTrkPt",       "pt of the two-GSF-track system"),
         "hdalitzDiTrkMass":     ("gsfDiTrkMass",     "invariant mass of the two GSF tracks "
                                                      "(the merged-electron mass used downstream)"),
+        # --- common-vertex fit of the two GSF tracks (KalmanVertexFitter) ---
+        # Lxy is a PHYSICAL conversion discriminator: a Dalitz gamma*->ee is prompt, a photon
+        # conversion is displaced. Sentinel -999 where there is no 2nd track or the fit failed.
+        "hdalitzVtxX":          ("gsfVtxX",          "x of the two-GSF-track fitted vertex [cm]"),
+        "hdalitzVtxY":          ("gsfVtxY",          "y of the two-GSF-track fitted vertex [cm]"),
+        "hdalitzVtxZ":          ("gsfVtxZ",          "z of the two-GSF-track fitted vertex [cm]"),
+        "hdalitzVtxChi2":       ("gsfVtxChi2",       "chi2 of the two-GSF-track vertex fit"),
+        "hdalitzVtxNdof":       ("gsfVtxNdof",       "ndof of the two-GSF-track vertex fit"),
+        "hdalitzVtxProb":       ("gsfVtxProb",       "vertex-fit probability, TMath::Prob(chi2,ndof)"),
+        "hdalitzVtxLxy":        ("gsfVtxLxy",        "transverse flight length of the fitted vertex "
+                                                     "from the PV [cm] -- prompt for Dalitz, "
+                                                     "displaced for a photon conversion"),
+        "hdalitzVtxLxySig":     ("gsfVtxLxySig",     "Lxy / sigma(Lxy)"),
+        "hdalitzVtxDiTrkMass":  ("gsfVtxDiTrkMass",  "di-track mass from the tracks REFITTED to the "
+                                                     "common vertex (cf. gsfDiTrkMass, unrefitted)"),
     }
     _gsfI = {
         "hdalitzMainGsfCharge":    ("gsfMainTrkCharge",    "charge of the electron's own GSF track"),
@@ -401,6 +444,7 @@ def customizeHDalitzMergedElectron(process):
         "hdalitzAddGsfPixelHits":  ("gsfAddTrkPixelHits",  "valid pixel hits, additional GSF track"),
         "hdalitzAddGsfLayers":     ("gsfAddTrkLayers",     "tracker layers with measurement, additional GSF track"),
         "hdalitzHasAddGsf":        ("gsfHasAddTrk",        "an additional (second) GSF track was found"),
+        "hdalitzVtxIsValid":       ("gsfVtxIsValid",       "the two-GSF-track vertex fit converged"),
     }
     for label, (name, doc) in _gsfF.items():
         setattr(ev, name, ExtVar(cms.InputTag("hdalitzMergedID", label), float, doc=doc, precision=14))

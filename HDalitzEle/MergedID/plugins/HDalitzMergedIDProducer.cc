@@ -31,6 +31,14 @@
 #include "DataFormats/Math/interface/deltaR.h"
 #include "DataFormats/Math/interface/LorentzVector.h"
 
+#include "FWCore/Framework/interface/EventSetup.h"
+#include "TrackingTools/Records/interface/TransientTrackRecord.h"
+#include "TrackingTools/TransientTrack/interface/TransientTrackBuilder.h"
+#include "TrackingTools/TransientTrack/interface/TransientTrack.h"
+#include "RecoVertex/KalmanVertexFit/interface/KalmanVertexFitter.h"
+#include "RecoVertex/VertexPrimitives/interface/TransientVertex.h"
+#include "TMath.h"
+
 #include "HDalitzEle/MergedID/interface/HDalitzMergedEstimatorBase.h"
 #include "HDalitzEle/MergedID/interface/HDalitzMergedEstimatorOnnx.h"
 #ifdef HDALITZ_HAS_XGBOOST
@@ -59,6 +67,7 @@ private:
   const edm::EDGetTokenT<edm::View<reco::GsfTrack>> gsfToken_;
   const edm::EDGetTokenT<double> rhoToken_;
   const edm::EDGetTokenT<reco::VertexCollection> vtxToken_;
+  const edm::ESGetToken<TransientTrackBuilder, TransientTrackRecord> ttbToken_;
 
   const double m1EBWP_, m1EEWP_, m2EBWP_, m2EEWP_;
 
@@ -76,6 +85,7 @@ HDalitzMergedIDProducer::HDalitzMergedIDProducer(const edm::ParameterSet& cfg)
       gsfToken_(consumes<edm::View<reco::GsfTrack>>(cfg.getParameter<edm::InputTag>("srcGsfTracks"))),
       rhoToken_(consumes<double>(cfg.getParameter<edm::InputTag>("srcRho"))),
       vtxToken_(consumes<reco::VertexCollection>(cfg.getParameter<edm::InputTag>("srcVertices"))),
+      ttbToken_(esConsumes(edm::ESInputTag("", "TransientTrackBuilder"))),
       m1EBWP_(cfg.getParameter<double>("m1EBWPTight")),
       m1EEWP_(cfg.getParameter<double>("m1EEWPTight")),
       m2EBWP_(cfg.getParameter<double>("m2EBWPTight")),
@@ -98,12 +108,14 @@ HDalitzMergedIDProducer::HDalitzMergedIDProducer(const edm::ParameterSet& cfg)
   for (const char* l : {"MainGsfPt", "MainGsfEta", "MainGsfPhi", "MainGsfD0", "MainGsfDz",
                         "AddGsfPt", "AddGsfEta", "AddGsfPhi", "AddGsfD0", "AddGsfDz",
                         "GsfPtRatio", "GsfDeltaR", "GsfRelPtRatio", "GsfPtSum",
-                        "DiTrkPt", "DiTrkMass"})
+                        "DiTrkPt", "DiTrkMass",
+                        "VtxX", "VtxY", "VtxZ", "VtxChi2", "VtxNdof", "VtxProb",
+                        "VtxLxy", "VtxLxySig", "VtxDiTrkMass"})
     produces<edm::ValueMap<float>>(std::string("hdalitz") + l);
   for (const char* l : {"MainGsfCharge", "MainGsfMissHits", "MainGsfLostHits",
                         "MainGsfPixelHits", "MainGsfLayers",
                         "AddGsfCharge", "AddGsfMissHits", "AddGsfLostHits",
-                        "AddGsfPixelHits", "AddGsfLayers", "HasAddGsf"})
+                        "AddGsfPixelHits", "AddGsfLayers", "HasAddGsf", "VtxIsValid"})
     produces<edm::ValueMap<int>>(std::string("hdalitz") + l);
 }
 
@@ -123,7 +135,12 @@ std::unique_ptr<HDalitzMergedEstimatorBase> HDalitzMergedIDProducer::makeEstimat
          ".";
 }
 
-void HDalitzMergedIDProducer::produce(edm::Event& iEvent, const edm::EventSetup&) {
+void HDalitzMergedIDProducer::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) {
+  // Kalman fit of the two GSF tracks to a common vertex. Beyond giving the merged electron a
+  // decay position, the transverse flight length Lxy is a PHYSICAL conversion discriminator:
+  // a Dalitz gamma*->ee is prompt (Lxy ~ 0), a photon conversion is displaced. That is the
+  // handle the geometric conversion matching could not provide.
+  const TransientTrackBuilder& ttb = iSetup.getData(ttbToken_);
   auto eleHandle = iEvent.getHandle(eleToken_);
   auto gsfHandle = iEvent.getHandle(gsfToken_);
   const double rho = iEvent.get(rhoToken_);
@@ -141,7 +158,10 @@ void HDalitzMergedIDProducer::produce(edm::Event& iEvent, const edm::EventSetup&
       oPtSum(nEle, kSentinel), oDiTrkPt(nEle, kSentinel), oDiTrkMass(nEle, kSentinel);
   std::vector<int> oMCharge(nEle, 0), oMMiss(nEle, -1), oMLost(nEle, -1), oMPix(nEle, -1),
       oMLayers(nEle, -1), oACharge(nEle, 0), oAMiss(nEle, -1), oALost(nEle, -1), oAPix(nEle, -1),
-      oALayers(nEle, -1), oHasAdd(nEle, 0);
+      oALayers(nEle, -1), oHasAdd(nEle, 0), oVtxOk(nEle, 0);
+  std::vector<float> oVX(nEle, kSentinel), oVY(nEle, kSentinel), oVZ(nEle, kSentinel),
+      oVChi2(nEle, kSentinel), oVNdof(nEle, kSentinel), oVProb(nEle, kSentinel),
+      oVLxy(nEle, kSentinel), oVLxySig(nEle, kSentinel), oVMass(nEle, kSentinel);
 
   // primary vertex (fall back to origin if none) -- used for track d0/dz, matching ggNtuplizer
   const reco::Vertex::Point pv = vtxs.empty() ? reco::Vertex::Point(0, 0, 0) : vtxs.front().position();
@@ -254,6 +274,41 @@ void HDalitzMergedIDProducer::produce(edm::Event& iEvent, const edm::EventSetup&
       oPtSum[i] = gPt[m] + gPt[subIdx];
       oDiTrkPt[i] = (t1 + t2).pt();
       oDiTrkMass[i] = (t1 + t2).M();  // <- the merged-electron mass used downstream
+
+      // --- common-vertex fit of the two GSF tracks ---
+      try {
+        std::vector<reco::TransientTrack> tts{ttb.build((*gsfHandle)[m]),
+                                              ttb.build((*gsfHandle)[subIdx])};
+        KalmanVertexFitter kvf(true);
+        TransientVertex tv = kvf.vertex(tts);
+        if (tv.isValid()) {
+          const reco::Vertex vtx(tv);
+          oVtxOk[i] = 1;
+          oVX[i] = vtx.x();
+          oVY[i] = vtx.y();
+          oVZ[i] = vtx.z();
+          oVChi2[i] = vtx.chi2();
+          oVNdof[i] = vtx.ndof();
+          oVProb[i] = (vtx.ndof() > 0) ? TMath::Prob(vtx.chi2(), static_cast<int>(vtx.ndof()))
+                                       : kSentinel;
+          const double dx = vtx.x() - pv.x(), dy = vtx.y() - pv.y();
+          const double lxy = std::sqrt(dx * dx + dy * dy);
+          oVLxy[i] = lxy;
+          const double exy = std::sqrt(vtx.covariance(0, 0) + vtx.covariance(1, 1));
+          oVLxySig[i] = (exy > 0.) ? lxy / exy : kSentinel;
+          // mass from the tracks refitted to the common vertex (better than the raw sum)
+          if (tv.hasRefittedTracks() && tv.refittedTracks().size() == 2) {
+            const auto& r = tv.refittedTracks();
+            const math::PtEtaPhiMLorentzVector r1(r[0].track().pt(), r[0].track().eta(),
+                                                  r[0].track().phi(), kEleMass);
+            const math::PtEtaPhiMLorentzVector r2(r[1].track().pt(), r[1].track().eta(),
+                                                  r[1].track().phi(), kEleMass);
+            oVMass[i] = (r1 + r2).M();
+          }
+        }
+      } catch (const std::exception&) {
+        // a failed fit leaves the sentinels; never let it kill the job
+      }
     }
 
     // standard electron features (exactly as ggNtuplizer computes them)
@@ -339,6 +394,16 @@ void HDalitzMergedIDProducer::produce(edm::Event& iEvent, const edm::EventSetup&
   writeValueMap(iEvent, eleHandle, oAPix, "hdalitzAddGsfPixelHits");
   writeValueMap(iEvent, eleHandle, oALayers, "hdalitzAddGsfLayers");
   writeValueMap(iEvent, eleHandle, oHasAdd, "hdalitzHasAddGsf");
+  writeValueMap(iEvent, eleHandle, oVtxOk, "hdalitzVtxIsValid");
+  writeValueMap(iEvent, eleHandle, oVX, "hdalitzVtxX");
+  writeValueMap(iEvent, eleHandle, oVY, "hdalitzVtxY");
+  writeValueMap(iEvent, eleHandle, oVZ, "hdalitzVtxZ");
+  writeValueMap(iEvent, eleHandle, oVChi2, "hdalitzVtxChi2");
+  writeValueMap(iEvent, eleHandle, oVNdof, "hdalitzVtxNdof");
+  writeValueMap(iEvent, eleHandle, oVProb, "hdalitzVtxProb");
+  writeValueMap(iEvent, eleHandle, oVLxy, "hdalitzVtxLxy");
+  writeValueMap(iEvent, eleHandle, oVLxySig, "hdalitzVtxLxySig");
+  writeValueMap(iEvent, eleHandle, oVMass, "hdalitzVtxDiTrkMass");
 }
 
 template <typename T>
