@@ -93,14 +93,14 @@ def make_pset(s, slim=False, nthreads=1):
     return pset
 
 
-def submit(s, dryrun, slim=False, nthreads=1, units=None, memory=None, blacklist=None):
+def submit(s, dryrun, slim=False, nthreads=1, units=None, memory=None, blacklist=None, suffix=""):
     pset = make_pset(s, slim=slim, nthreads=nthreads)
     if dryrun:
         print("[dryrun] PSet ready:", pset, "\n"); return
     from CRABClient.UserUtilities import config
     from CRABAPI.RawCommand import crabCommand
     c = config()
-    c.General.requestName = ("nanoDalitz_%s" % s["name"])[:100]
+    c.General.requestName = ("nanoDalitz_%s%s" % (s["name"], suffix))[:100]
     c.General.workArea = "crab_projects"
     c.General.transferOutputs = True
     c.General.transferLogs = False
@@ -115,7 +115,7 @@ def submit(s, dryrun, slim=False, nthreads=1, units=None, memory=None, blacklist
     c.Data.unitsPerJob = units or UNITS_PER_JOB
     c.Data.outLFNDirBase = OUT_LFN_BASE
     c.Data.publication = False
-    c.Data.outputDatasetTag = s["name"]
+    c.Data.outputDatasetTag = s["name"] + suffix
     if s["isData"] and s.get("lumimask"):
         lm = s["lumimask"]
         # placeholder tags (GOLDEN_UL / GOLDEN_2018 / ...) resolve per-era from jsons/
@@ -158,6 +158,10 @@ def main():
                          "exactly the minimal 2-core slot")
     ap.add_argument("--site-blacklist", default=os.environ.get("CND_SITE_BLACKLIST", ""),
                     help="comma-separated sites to exclude (e.g. T2_ES_CIEMAT)")
+    ap.add_argument("--suffix", default="",
+                    help="append to requestName and outputDatasetTag, e.g. _recovery1 for a CRAB "
+                         "recovery task over notFinishedLumis.json (pass that file via "
+                         "CND_GOLDEN_JSON)")
     a = ap.parse_args()
     blacklist = [x for x in a.site_blacklist.split(",") if x]
     os.environ.setdefault("X509_USER_PROXY", PROXY)
@@ -175,7 +179,7 @@ def main():
           "| units/job:", a.units or UNITS_PER_JOB)
     print("samples:", [s["name"] for s in picked], "\n")
     failed = [f for f in (submit(s, a.dryrun, slim=a.slim, nthreads=a.nthreads, units=a.units,
-                                 memory=a.memory, blacklist=blacklist)
+                                 memory=a.memory, blacklist=blacklist, suffix=a.suffix)
                           for s in picked) if f]
     if failed:
         sys.exit("FAILED submits (%d): %s" % (len(failed), " ".join(failed)))
