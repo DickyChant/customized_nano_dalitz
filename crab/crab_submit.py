@@ -93,7 +93,7 @@ def make_pset(s, slim=False, nthreads=1):
     return pset
 
 
-def submit(s, dryrun, slim=False, nthreads=1, units=None):
+def submit(s, dryrun, slim=False, nthreads=1, units=None, memory=None, blacklist=None):
     pset = make_pset(s, slim=slim, nthreads=nthreads)
     if dryrun:
         print("[dryrun] PSet ready:", pset, "\n"); return
@@ -107,7 +107,7 @@ def submit(s, dryrun, slim=False, nthreads=1, units=None):
     c.JobType.pluginName = "Analysis"
     c.JobType.psetName = pset
     # the _15X nano chain peaks at ~3.5 GB even single-threaded (2500 -> jobs killed, 50660)
-    c.JobType.maxMemoryMB = job_memory_mb(nthreads)
+    c.JobType.maxMemoryMB = memory or job_memory_mb(nthreads)
     c.JobType.numCores = nthreads
     c.Data.inputDataset = s["dataset"]
     c.Data.inputDBS = "global"
@@ -122,6 +122,8 @@ def submit(s, dryrun, slim=False, nthreads=1, units=None):
         # (or CND_GOLDEN_JSON if set); a real path in lumimask is used as-is.
         c.Data.lumiMask = golden_json(s) if lm.startswith("GOLDEN") else lm
     c.Site.storageSite = STORAGE_SITE
+    if blacklist:
+        c.Site.blacklist = blacklist
     print("[submit]", c.General.requestName, "->", s["dataset"])
     # CRABClient can only submit once per process (state pollution: the 2nd+ call fails
     # with an empty error) -> fork each submit, per the official multicrab recipe.
@@ -150,7 +152,14 @@ def main():
     ap.add_argument("--units", type=int, default=None,
                     help=("MINIAOD files per job (default %d); raise it with --nthreads so job "
                           "runtime stays well above the ~2 min startup cost" % UNITS_PER_JOB))
+    ap.add_argument("--memory", type=int, default=None,
+                    help="override maxMemoryMB. Data is much lighter than signal MC (measured "
+                         "~1 GB avg / 4.1 GB max at 4 threads), so 2 threads fits in 4000 = "
+                         "exactly the minimal 2-core slot")
+    ap.add_argument("--site-blacklist", default=os.environ.get("CND_SITE_BLACKLIST", ""),
+                    help="comma-separated sites to exclude (e.g. T2_ES_CIEMAT)")
     a = ap.parse_args()
+    blacklist = [x for x in a.site_blacklist.split(",") if x]
     os.environ.setdefault("X509_USER_PROXY", PROXY)
     SAMPLES = importlib.import_module(a.samples).SAMPLES
     print("samples module:", a.samples, "(%d entries)" % len(SAMPLES))
@@ -161,10 +170,12 @@ def main():
         sys.exit("no samples matched (release=%s only=%s)" % (a.release, a.only))
     print("proxy:", os.environ["X509_USER_PROXY"], "| out:", OUT_LFN_BASE, "| site:", STORAGE_SITE,
           "| slim:", a.slim, "| threads:", a.nthreads,
-          "| mem:", job_memory_mb(a.nthreads), "MB",
+          "| mem:", a.memory or job_memory_mb(a.nthreads), "MB",
+          "| blacklist:", ",".join(blacklist) or "-",
           "| units/job:", a.units or UNITS_PER_JOB)
     print("samples:", [s["name"] for s in picked], "\n")
-    failed = [f for f in (submit(s, a.dryrun, slim=a.slim, nthreads=a.nthreads, units=a.units)
+    failed = [f for f in (submit(s, a.dryrun, slim=a.slim, nthreads=a.nthreads, units=a.units,
+                                 memory=a.memory, blacklist=blacklist)
                           for s in picked) if f]
     if failed:
         sys.exit("FAILED submits (%d): %s" % (len(failed), " ".join(failed)))
